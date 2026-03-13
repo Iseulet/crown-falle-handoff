@@ -1,0 +1,12 @@
+# OS
+.DS_Store
+Thumbs.db
+
+# No source code should ever be here
+*.gd
+*.tscn
+*.tres
+*.json
+*.jsonc
+*.godot
+*.import
