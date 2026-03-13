@@ -8,11 +8,10 @@
 
 | Field | Value |
 |-------|-------|
-| Generated | 2026-03-13 |
-| Source commit | f733cc3 |
+| Generated | 2026-03-13 (재갱신) |
+| Source commit | bc0d5b7 |
 | Uncommitted changes | No |
-| Sessions since last sync | 2 (2026-03-12, 2026-03-13) |
-| DECISIONS.md entries since last sync | 0 (신규 없음) |
+| Sessions since last sync | 3 (2026-03-12, 2026-03-13 x2) |
 
 ⚠️ If reading this after the generated date, information may be outdated.
 > 🇰🇷 생성일 이후에 읽는 경우 정보가 오래되었을 수 있습니다.
@@ -23,88 +22,115 @@
 
 | 항목 | 내용 |
 |------|------|
-| 현재 Phase | Doc 6 Phase 0~6 완료 + 환경/데코레이션 시스템 완료 — Phase B 대기 |
-| 세션 상태 | 🔴 Closed |
-| Git | `main` branch, last commit `f733cc3` |
+| 현재 Phase | **Phase B — Tier 1 완료, Tier 2 구현 진행 예정** |
+| 세션 상태 | 🟡 Active (T2 구현 작업 중) |
+| Git | `main` branch, last commit `bc0d5b7` |
 | 마지막 작업 | 2026-03-13 |
-| 공개 핸드오프 리포 | `Iseulet/crown-falle-handoff` 생성 완료 |
 
 ---
 
 ## 최근 세션 완료 작업
 
-### 2026-03-13 — Claude Code 환경 구축 + 공개 리포
+### 2026-03-13 — Tier 1 전투 시스템 구현 완료 (커밋 bc0d5b7)
 
-**Claude Code 환경 (2026-03-13-claude-code-environment-final.md Step 1~8):**
-- `memory/SCRATCHPAD.md` — 절대규칙/자주발생실수/유용한패턴 학습 저장소
-- `.claude/commands/` — 5개 슬래시 커맨드 (plan/implement/review/commit/sync)
-- `skills/` — 3개 스킬 파일 (gdscript-conventions/data-driven-design/asset-pipeline)
-- `agents/` Skill References 추가 (PLANNER/IMPLEMENTOR/REVIEWER)
-- `handoff/DECISIONS.md` — Category/Status/Superseded By 메타데이터 포맷 마이그레이션
+**T1-1 스탯 시스템:**
+- `combat_config.jsonc` — stat_derivation / armor / hit / crit / stamina 계수 전면 재구성
+- `CombatUnit.initialize_stats()` — 5차 스탯 → HP/MP/STA/ARM/RES 게이지 파생
+- `CombatUnit.get_hit() / get_crit() / get_mv()` — 2차 스탯 공식 구현
 
-**공개 핸드오프 리포 (`2026-03-13-handoff-public-repo.md`):**
-- `Iseulet/crown-falle-handoff` 공개 GitHub 리포 생성
-- Claude Desktop이 raw URL로 최신 컨텍스트 직접 읽기 가능 (수동 업로드 불필요)
-- `tools/sync_to_public.ps1` — proto→handoff 단방향 동기화 스크립트
-- `/sync` 커맨드 Step 5~6 추가 (공개 리포 자동 동기화)
+**T1-2 ARM/RES 게이지형 방어:**
+- `take_physical_damage()` — ARM 먼저 차감 후 잔여만 HP 전이
+- `take_magic_damage()` — RES 먼저 차감 후 잔여만 HP 전이
+- CC 게이트: ARM ≥ 1 → 물리 CC 면역 / RES ≥ 1 → 마법 CC 면역 (T2-1에서 활용)
 
-### 2026-03-12 — 레벨 데코레이션 + 환경 시스템
+**T1-3 전투 공식:**
+- HIT 판정: base 70 + DEX × 0.5 + 레벨 편차 × 3, 클램프 5~95%
+- CRIT 판정: DEX × 0.5 + 직업보정, 백어택 +20%
+- 데미지: STR/DEX/INT × 계수 (직업별), CRIT 시 1.5배
+- `CombatScene._is_backattack()` 백어택 판정
 
-**환경 시스템:**
-- `EnvironmentConfig.gd` (static class) — `data/environments/environment_config.json` 파싱
-- `EnvironmentBuilder.gd` — 맵별 DirectionalLight3D/WorldEnvironment 적용
-- 캐릭터 라이트: `character_light` (레이어 2), `UnitRenderer3D._set_character_layers()` 재귀 적용
+**T1-4 STA 시스템:**
+- `consume_sta(amount)` — 부족 시 false 반환
+- `regen_sta()` — 턴 시작 +5 회복, 교전 중 -5 차감 (교전 유지 비용 현상 유지)
+- `CombatScene._regen_all_sta()` — 아군/적군 전체 턴 시작 처리
 
-**레벨 데코레이션 시스템:**
-- FBX 24종 승격 (성채/마을/자연/야외 테마별)
-- `data/levels/level_decoration.json` — 4맵별 exterior/interior 배치 정의
-- `LevelDecorationConfig.gd` / `LevelDecorationBuilder.gd` 신규
-- `CombatScene.gd` 연동 — 전투 시작 시 자동 배치
+**투사체 시스템 (Phase B-1):**
+- `ProjectileConfig.gd` — `data/projectiles/*.json` 기반 투사체 속성 관리
+- `Projectile.gd` — 비동기 비행 (공격자 즉시 idle 복귀), hit_arrived 시그널
+- `ProjectileManager.gd` — spawn/clear_all, 동시 투사체 격리
+- `CombatScene._handle_spawn_projectile()` + `_on_projectile_hit()` 연동
 
-**이전 세션 연속 작업:**
-- Quaternius RPG Classes FBX 교체 (warrior/ranger/rogue/wizard)
-- HP 게이지 + 파벌 서클 시스템
-- 스폰 방향 초기화 (`_face_units_toward_opponents()`)
-- 카메라 사망 연출 개선 (ratio 0.45 이벤트 기반)
+**GridManager 확장:**
+- `grid_distance()` — 스태거드 오프셋 → 큐브 좌표 변환으로 정확한 거리 계산
+- `get_cells_in_range()` — 원거리 공격 범위 내 셀 조회
+
+**설계 문서:**
+- `handoff/plans/design/2026-03-13-combat-system-proposal-final.md` — T1~T4 전체 로드맵 확정
+- `handoff/plans/design/2026-03-13-tier1-engagement-v2.md` — 교전 v2 상세 설계 (T1-5 + T2-5 + T2-6)
+- `handoff/plans/design/2026-03-13-tier1-stat-full-implementation.md` — T1-1~T1-4 구현 스펙
+- `handoff/plans/design/2026-03-13-phase-b-projectile-system.md` — 투사체 설계
+- `handoff/plans/design/2026-03-13-tier1-damage-flow.md` — 데미지 흐름 설계
 
 ---
 
 ## 미완료 / 다음 작업
 
-### 즉시 확인 필요 (Godot 테스트 — 코드 없음)
-- [ ] 레벨 데코레이션: 전투 시작 시 ExteriorDecoration + InteriorDecoration 노드 씬 트리 확인
-- [ ] 외곽 건물/소품이 그리드 밖에 정확히 배치되는지 확인
-- [ ] 내부 소품이 스폰 영역 제외하고 eligible_terrain에만 배치되는지 확인
-- [ ] 4개 맵(KEY 1~4) 각각 테마별 에셋 표시 확인
-- [ ] FBX import 경고 여부 확인
-- [ ] warrior_rpg.fbx AnimationPlayer 클립 이름 확인 (`CharacterArmature|Idle` vs `Idle`)
-- [ ] HP_BAR_Y=1.8 높이 최종 조정 (모델 크기 확인 후)
+### 🔴 T2 구현 예정 (현재 세션 진행 중)
 
-### 미진행 계획 논의
-- [ ] Phase B 개발 계획 정리 (이번 세션 /plan 시작 중 종료 — 다음 세션 재개)
-  - 논의 필요: 범위(Phase B만 vs 전체 로드맵), 목표(연출 우선 vs 게임플레이 루프 우선)
+**다음 구현 순서 (의존성 기반):**
 
-### Phase B (다음 단계)
-- [ ] 원거리 공격 사거리 시스템
-- [ ] 투사체 비행 (비동기, 공격자 즉시 idle 복귀)
-- [ ] Archer/Mage/Rogue 전용 에셋 완성
-- [ ] dodge.glb 에셋 수급
+| 순서 | 시스템 | 주요 파일 | 설계 문서 |
+|------|--------|----------|----------|
+| 1 | T1-5 교전 v2 (기회 공격 + 강제 이탈) | CombatScene.gd, CombatUnit.gd | tier1-engagement-v2.md |
+| 2 | T2-5 VP 시스템 | CombatScene.gd | tier1-engagement-v2.md §7.3 |
+| 3 | T2-6 VP 이탈 | CombatScene.gd | tier1-engagement-v2.md §5.2 |
+| 4 | T2-1 상태이상 (CC+DoT) | StatusManager.gd (신규), status_effects.json | tier2-status-effects.md (미작성) |
+| 5 | T2-2 액티브 스킬 | SkillManager.gd (신규), active_skills.json | tier2-active-skills.md (미작성) |
+| 6 | T2-4 원소 시스템 | ElementResolver.gd (신규), element_table.json | tier2-element-system.md (미작성) |
+| 7 | 디버그 모듈 | DebugCombatPanel.gd (신규) | — |
+
+**신규 생성 예정 파일:**
+- `scripts/combat/StatusManager.gd`
+- `scripts/combat/SkillManager.gd`
+- `scripts/combat/ElementResolver.gd`
+- `scripts/test/DebugCombatPanel.gd`
+- `data/effects/status_effects.json`
+- `data/effects/element_table.json`
+- `data/skills/active_skills.json`
+- `handoff/plans/design/2026-03-13-tier2-status-effects.md`
+- `handoff/plans/design/2026-03-13-tier2-active-skills.md`
+- `handoff/plans/design/2026-03-13-tier2-element-system.md`
+
+### ✅ 이미 완료된 작업
+
+| 시스템 | 상태 |
+|--------|------|
+| T1-1 스탯 시스템 | ✅ 완료 |
+| T1-2 ARM/RES 게이지 | ✅ 완료 |
+| T1-3 전투 공식 HIT/CRIT | ✅ 완료 |
+| T1-4 STA 시스템 | ✅ 완료 |
+| T2-3 패시브 스킬 (PassiveManager) | ✅ 완료 |
+| 투사체 비동기 시스템 | ✅ 완료 |
+| AnimEvent / CameraDirector | ✅ 완료 |
+| 환경/데코레이션 시스템 | ✅ 완료 |
 
 ---
 
-## 최근 아키텍처 결정 (신규 — 2026-03-12~13)
+## 핵심 아키텍처 결정 (T1 이후 확정)
 
-### 환경 시스템 (2026-03-12)
-- 맵 테마: castle/village/forest/field (4종)
-- `EnvironmentBuilder` — 조명 + 안개 + 하늘을 맵 KEY에 따라 교체
-- 캐릭터 전용 라이트: 레이어 2 (배경 조명과 분리)
+### ARM/RES 게이지형 방어 (D1)
+- **%형 폐기** → 게이지형 (CON × 3 = ARM, WIL × 3 = RES)
+- 공격이 ARM/RES를 먼저 깎고, 0이 되면 HP 직접 차감
+- CC 게이트: ARM > 0 → 물리 CC 면역, RES > 0 → 마법 CC 면역
 
-### 레벨 데코레이션 (2026-03-12)
-- exterior: 그리드 외곽 배치 (건물/울타리 등)
-- interior: 그리드 내부 배치 (스폰 영역 제외, eligible_terrain만)
-- 맵별 JSON 데이터 주도 — 에셋 추가 = JSON 수정만
+### VP 초기값 (D2)
+- 파티 인원 × 1 (4인 = 4VP)
+- 적 처치 +1, 치명타 +1 / VP 이탈 -1 / 궁극기 -2~3
 
-### Claude Code 운영 환경 (2026-03-13)
-- SCRATCHPAD.md: 에이전트 간 학습 공유 (절대규칙/실수/패턴)
-- 슬래시 커맨드: /plan, /implement, /review, /commit, /sync
-- 공개 리포: raw URL 기반 Claude Desktop 자동 읽기
+### 원소 시스템 (D5)
+- 원소는 캐릭터가 아닌 **스킬/아이템에 귀속**
+- Mage 적성 없음 — 자유 조합
+- Wet + 냉기 → 빙결(RES 게이트), Wet + 전기 → 감전 증폭
+
+### 구현 테스트 방식
+- Godot 에디터 실행 없이 코드만 작성 (디버그 모듈로 일괄 검증 예정)
