@@ -1,5 +1,21 @@
 # CrownFalle Proto — 현재 세션 컨텍스트
-> 생성일: 2026-03-12 | 갱신 주기: 세션마다
+> 생성일: 2026-03-13 | 갱신 주기: 세션마다
+
+---
+
+## Sync Metadata
+> 🇰🇷 싱크 메타데이터
+
+| Field | Value |
+|-------|-------|
+| Generated | 2026-03-13 |
+| Source commit | f733cc3 |
+| Uncommitted changes | No |
+| Sessions since last sync | 2 (2026-03-12, 2026-03-13) |
+| DECISIONS.md entries since last sync | 0 (신규 없음) |
+
+⚠️ If reading this after the generated date, information may be outdated.
+> 🇰🇷 생성일 이후에 읽는 경우 정보가 오래되었을 수 있습니다.
 
 ---
 
@@ -7,101 +23,88 @@
 
 | 항목 | 내용 |
 |------|------|
-| 현재 Phase | Doc 6 Phase 0~6 완료 — Phase B 대기 |
-| 세션 상태 | 🟡 In Progress (미커밋) |
-| Git | `main` branch, last commit `72c3597` |
-| 마지막 작업 | 2026-03-12 |
+| 현재 Phase | Doc 6 Phase 0~6 완료 + 환경/데코레이션 시스템 완료 — Phase B 대기 |
+| 세션 상태 | 🔴 Closed |
+| Git | `main` branch, last commit `f733cc3` |
+| 마지막 작업 | 2026-03-13 |
+| 공개 핸드오프 리포 | `Iseulet/crown-falle-handoff` 생성 완료 |
 
 ---
 
-## 최근 세션 완료 작업 (2026-03-12)
+## 최근 세션 완료 작업
 
-### 1. 에셋 시스템 구축
-- `assets/_library/` 구조 생성 + `.gdignore` (Godot 임포트 차단)
-- Quaternius 4팩 + Synty 1팩 수급 → `_library/` 정리
-- `ASSET_LOG.md` 생성 (승격 이력 기록)
-- `tools/verify_skeleton.py` 생성 (GLB/GLTF 본 이름 검증)
+### 2026-03-13 — Claude Code 환경 구축 + 공개 리포
 
-### 2. Quaternius RPG Classes FBX 교체
-- Meshy AI GLB → `_library/characters/backup_meshy/` 백업
-- warrior/ranger/rogue/wizard_rpg.fbx → `assets/characters/{class}/` 승격
-- **UnitRenderer3D.gd 변경:**
-  - `ANIM_PATHS` Dict 포맷: `{"path": ..., "clip": ...}` 지원
-  - `_import_anim(clip_name)` — 정확 매칭 + `|suffix` 폴백
-  - `_apply_png_textures()` 신규 — FBX 외부 텍스처 경로 깨짐 해결
-  - idle 루프: `anim.loop_mode = LOOP_LINEAR` 명시 설정
+**Claude Code 환경 (2026-03-13-claude-code-environment-final.md Step 1~8):**
+- `memory/SCRATCHPAD.md` — 절대규칙/자주발생실수/유용한패턴 학습 저장소
+- `.claude/commands/` — 5개 슬래시 커맨드 (plan/implement/review/commit/sync)
+- `skills/` — 3개 스킬 파일 (gdscript-conventions/data-driven-design/asset-pipeline)
+- `agents/` Skill References 추가 (PLANNER/IMPLEMENTOR/REVIEWER)
+- `handoff/DECISIONS.md` — Category/Status/Superseded By 메타데이터 포맷 마이그레이션
 
-### 3. HP 게이지 + 클래스 레이블 시스템
-- `UnitRenderer3D._create_hp_bar(class_id, is_ally)` — QuadMesh 배경+채움
-- `update_hp(current, max)` — HP% 기반 녹색→노랑→빨강 색상 전환
-- `_process()` — `look_at(pos - to_cam)` 으로 QuadMesh 앞면 카메라 향함
-- `Label3D` billboard — 클래스명 항상 카메라 정면
-- `CombatUnit._hp_label` 제거 → `_renderer.update_hp()` 연결
+**공개 핸드오프 리포 (`2026-03-13-handoff-public-repo.md`):**
+- `Iseulet/crown-falle-handoff` 공개 GitHub 리포 생성
+- Claude Desktop이 raw URL로 최신 컨텍스트 직접 읽기 가능 (수동 업로드 불필요)
+- `tools/sync_to_public.ps1` — proto→handoff 단방향 동기화 스크립트
+- `/sync` 커맨드 Step 5~6 추가 (공개 리포 자동 동기화)
 
-### 4. 파벌 서클 (Faction Disc)
-- 선택 링(TorusMesh) → CylinderMesh 평면 디스크로 교체
-- 기본 `visible = false` — 조건부 표시:
-  - **아군**: 클릭 선택 시만 표시 (파란색)
-  - **적군**: 행동 중에만 표시 (빨간색)
-- `position.y = 0.06` — 타일 상단(0.05) 위에 위치
-- 적군 빨간 재질 오버레이 제거
+### 2026-03-12 — 레벨 데코레이션 + 환경 시스템
 
-### 5. 스폰 방향 초기화
-- `_face_units_toward_opponents()` 함수 신규
-- 스폰 완료 후 각 유닛이 가장 가까운 적 방향을 바라봄
+**환경 시스템:**
+- `EnvironmentConfig.gd` (static class) — `data/environments/environment_config.json` 파싱
+- `EnvironmentBuilder.gd` — 맵별 DirectionalLight3D/WorldEnvironment 적용
+- 캐릭터 라이트: `character_light` (레이어 2), `UnitRenderer3D._set_character_layers()` 재귀 적용
 
-### 6. 카메라 사망 연출 개선
-- `DEBUG_FORCE_CRIT = false` (테스트 모드 해제)
-- 사망 시 즉시 셰이크 제거 → `animation_config.json` dead_hit ratio 0.45 이벤트로 이동
-- `shake_execute`: intensity 0.80→0.35, duration 0.40s→0.22s, decay ease_out
-- `soft_track_melee` weight: 0.20→0.12
-- 카메라 포커스 y 오프셋 +0.7 (발→몸통 중심)
+**레벨 데코레이션 시스템:**
+- FBX 24종 승격 (성채/마을/자연/야외 테마별)
+- `data/levels/level_decoration.json` — 4맵별 exterior/interior 배치 정의
+- `LevelDecorationConfig.gd` / `LevelDecorationBuilder.gd` 신규
+- `CombatScene.gd` 연동 — 전투 시작 시 자동 배치
 
----
-
-## 수정된 파일 목록 (미커밋)
-
-| 파일 | 변경 내용 |
-|------|----------|
-| `scripts/rendering/UnitRenderer3D.gd` | 텍스처, HP바, 파벌 서클, 방향 |
-| `scripts/combat/CombatScene.gd` | 스폰방향, 카메라 ctx, 적 행동 disc |
-| `scripts/combat/CombatUnit.gd` | _hp_label 제거, update_hp 연결 |
-| `data/animations/animation_config.json` | dead_hit camera_effect ratio 0.45 추가 |
-| `data/cameras/camera_config.json` | shake_execute, soft_track_melee 조정 |
-| `assets/characters/` | FBX + 텍스처 파일 추가 |
-| `assets/_library/` | 라이브러리 구조 생성 |
-| `ASSET_LOG.md` | 승격 이력 |
-| `tools/verify_skeleton.py` | 신규 생성 |
+**이전 세션 연속 작업:**
+- Quaternius RPG Classes FBX 교체 (warrior/ranger/rogue/wizard)
+- HP 게이지 + 파벌 서클 시스템
+- 스폰 방향 초기화 (`_face_units_toward_opponents()`)
+- 카메라 사망 연출 개선 (ratio 0.45 이벤트 기반)
 
 ---
 
 ## 미완료 / 다음 작업
 
-### 즉시 확인 필요
-- [ ] Godot 에디터에서 FBX 애니메이션 클립 이름 확인 (`CharacterArmature|Idle` vs `Idle`)
+### 즉시 확인 필요 (Godot 테스트 — 코드 없음)
+- [ ] 레벨 데코레이션: 전투 시작 시 ExteriorDecoration + InteriorDecoration 노드 씬 트리 확인
+- [ ] 외곽 건물/소품이 그리드 밖에 정확히 배치되는지 확인
+- [ ] 내부 소품이 스폰 영역 제외하고 eligible_terrain에만 배치되는지 확인
+- [ ] 4개 맵(KEY 1~4) 각각 테마별 에셋 표시 확인
+- [ ] FBX import 경고 여부 확인
+- [ ] warrior_rpg.fbx AnimationPlayer 클립 이름 확인 (`CharacterArmature|Idle` vs `Idle`)
 - [ ] HP_BAR_Y=1.8 높이 최종 조정 (모델 크기 확인 후)
+
+### 미진행 계획 논의
+- [ ] Phase B 개발 계획 정리 (이번 세션 /plan 시작 중 종료 — 다음 세션 재개)
+  - 논의 필요: 범위(Phase B만 vs 전체 로드맵), 목표(연출 우선 vs 게임플레이 루프 우선)
 
 ### Phase B (다음 단계)
 - [ ] 원거리 공격 사거리 시스템
 - [ ] 투사체 비행 (비동기, 공격자 즉시 idle 복귀)
-- [ ] Archer/Mage 전용 에셋
+- [ ] Archer/Mage/Rogue 전용 에셋 완성
 - [ ] dodge.glb 에셋 수급
 
 ---
 
-## 최근 아키텍처 결정 (2026-03-12)
+## 최근 아키텍처 결정 (신규 — 2026-03-12~13)
 
-### Unit Visual System
-- HP 게이지: QuadMesh 2개 (배경+채움) — `HP_BAR_Y=1.8`
-- `_process()` 에서 `look_at(pos - to_cam)` — QuadMesh +Z 앞면이 카메라를 향하게
-- 파벌 서클: CylinderMesh 디스크, `position.y=0.06` (타일 위)
-- 아군=선택시 파란색, 적=행동시 빨간색
+### 환경 시스템 (2026-03-12)
+- 맵 테마: castle/village/forest/field (4종)
+- `EnvironmentBuilder` — 조명 + 안개 + 하늘을 맵 KEY에 따라 교체
+- 캐릭터 전용 라이트: 레이어 2 (배경 조명과 분리)
 
-### FBX Animation Loading
-- `ANIM_PATHS` Dict 포맷: `{"path": "res://..fbx", "clip": "ClipName"}`
-- `_import_anim(path, anim_name, clip_name)` — 정확 매칭 → `|suffix` 폴백
-- 텍스처: `_apply_png_textures()` — 키워드 기반 메시 이름 감지
+### 레벨 데코레이션 (2026-03-12)
+- exterior: 그리드 외곽 배치 (건물/울타리 등)
+- interior: 그리드 내부 배치 (스폰 영역 제외, eligible_terrain만)
+- 맵별 JSON 데이터 주도 — 에셋 추가 = JSON 수정만
 
-### Camera Event Timing
-- 사망 셰이크: `_on_unit_died()` 즉시 발화 → `animation_config.json` ratio 0.45 이벤트로 이동
-- 이유: 사망 애니메이션 타격 시점에 카메라 연출 동기화
+### Claude Code 운영 환경 (2026-03-13)
+- SCRATCHPAD.md: 에이전트 간 학습 공유 (절대규칙/실수/패턴)
+- 슬래시 커맨드: /plan, /implement, /review, /commit, /sync
+- 공개 리포: raw URL 기반 Claude Desktop 자동 읽기

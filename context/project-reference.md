@@ -1,5 +1,5 @@
 # CrownFalle Proto — 프로젝트 레퍼런스
-> 생성일: 2026-03-12 | 갱신 주기: 아키텍처 변경 시만
+> 생성일: 2026-03-13 | 갱신 주기: 아키텍처 변경 시만
 
 ---
 
@@ -40,6 +40,8 @@ STR / DEX / CON / INT / WIL
 - 모든 수치는 JSON. 코드에 수치 직접 기재 금지.
 - 카메라 효과: `data/cameras/camera_config.json` 프리셋 이름으로만 참조.
 - 모션 이벤트: `data/animations/animation_config.json` ratio 기반.
+- 환경: `data/environments/environment_config.json` 맵 KEY 기반.
+- 레벨 데코레이션: `data/levels/level_decoration.json` 맵 KEY 기반.
 
 ### 2. 단일 진입점
 - 카메라 효과 → `CameraDirector.execute(preset_name, context)` 한 곳만.
@@ -62,20 +64,29 @@ crown-falle-proto/
 │   ├── animations/       ← animation_config.json, bone_masks.json, compositions/
 │   ├── cameras/          ← camera_config.json, combat_rules.json
 │   ├── classes/          ← fighter.json, archer.json, mage.json, rogue.json
+│   ├── environments/     ← environment_config.json (신규 2026-03-12)
+│   ├── levels/           ← level_decoration.json (신규 2026-03-12)
 │   └── projectiles/      ← arrow.json, magic_bolt.json, throw_stone.json
 ├── scripts/
 │   ├── singletons/       ← AnimationConfig.gd, CameraConfig.gd
 │   ├── animation/        ← AnimEventDispatcher.gd, CompositionBuilder.gd
 │   ├── rendering/        ← UnitRenderer3D.gd
 │   ├── combat/           ← CombatUnit.gd, CombatScene.gd
-│   └── camera/           ← CameraDirector.gd
+│   ├── camera/           ← CameraDirector.gd
+│   └── environment/      ← EnvironmentConfig.gd, EnvironmentBuilder.gd (신규 2026-03-12)
+│                           LevelDecorationConfig.gd, LevelDecorationBuilder.gd
 ├── assets/
 │   ├── _library/         ← 외부 리소스 격리 보관 (.gdignore)
 │   ├── characters/       ← shared/, fighter/, archer/, mage/, rogue/, enemies/
 │   └── models/units/     ← {class}_rigged.glb
 ├── addons/
 │   └── anim_event_editor/
-└── handoff/plans/design/ ← 설계 문서 (Doc 1~6)
+├── memory/
+│   └── SCRATCHPAD.md     ← 에이전트 학습 공유 (절대규칙/실수/패턴)
+├── skills/               ← gdscript-conventions.md, data-driven-design.md, asset-pipeline.md
+├── tools/
+│   └── sync_to_public.ps1 ← 공개 리포 동기화 스크립트
+└── handoff/plans/design/ ← 설계 문서 (Doc 1~6 + 환경/데코레이션/환경구축/공개리포)
 ```
 
 ---
@@ -86,10 +97,13 @@ crown-falle-proto/
 |---------|------|
 | `AnimationConfig.gd` | `animation_config.json` 파싱, loop/speed/event 쿼리 (static class) |
 | `CameraConfig.gd` | `camera_config.json` + `combat_rules.json` 파싱 (static class) |
+| `EnvironmentConfig.gd` | `environment_config.json` 파싱 — 맵 KEY별 조명/안개/하늘 설정 |
 | `AnimEventDispatcher.gd` | ratio 기반 이벤트 발화 (hit_frame/sfx/fx/camera_effect) |
 | `CompositionBuilder.gd` | AnimationTree sequence/blend/layer 빌더 |
-| `UnitRenderer3D.gd` | 모든 3D 비주얼 담당 (모델 로드, 애니, HP바, 파벌 서클) |
+| `UnitRenderer3D.gd` | 모든 3D 비주얼 담당 (모델 로드, 애니, HP바, 파벌 서클, 레이어) |
 | `CameraDirector.gd` | execute(preset, ctx) 단일 진입점, 4종 시네마틱 |
+| `EnvironmentBuilder.gd` | 맵 KEY에 따라 조명/환경 노드 빌드 |
+| `LevelDecorationBuilder.gd` | exterior/interior 에셋 자동 배치 |
 | `CombatUnit.gd` | 전투 유닛 상태/스탯/행동 |
 | `CombatScene.gd` | 전투 씬 진행 (TurnManager, AI, 이벤트 연결) |
 
@@ -119,9 +133,42 @@ assets/characters/{class}/ ← 승격된 실사용 에셋 (copy, not move)
 4. Godot Import 탭 설정
 5. `ASSET_LOG.md` 기록
 
-현재 사용 모델: **Quaternius RPG Classes FBX (CC0)** — warrior/ranger/rogue/wizard
-- 한 FBX에 모든 클립 내장
-- `ANIM_PATHS`: `{"path": "res://..fbx", "clip": "ClipName"}` Dict 포맷
+현재 사용 모델:
+- **캐릭터**: Quaternius RPG Classes FBX (CC0) — warrior/ranger/rogue/wizard
+  - 한 FBX에 모든 클립 내장
+  - `ANIM_PATHS`: `{"path": "res://..fbx", "clip": "ClipName"}` Dict 포맷
+- **레벨 데코레이션**: FBX 24종 — 성채/마을/자연/야외 테마별 (2026-03-12 추가)
+
+---
+
+## Claude Code 운영 환경 (2026-03-13 신규)
+
+### 슬래시 커맨드 (`.claude/commands/`)
+| 커맨드 | 역할 |
+|--------|------|
+| `/plan [request]` | @Planner 전환, 컨텍스트 로드, 설계 시작 |
+| `/implement [target]` | @Implementor 전환, 체크포인트, 구현 시작 |
+| `/review [target]` | @Reviewer 전환, 설계문서+컨벤션 재읽기, 리뷰 |
+| `/commit [notes]` | 5단계 체크리스트 게이트 → 커밋 메시지 제안 → 승인 대기 |
+| `/sync [scope]` | 싱크 패키지 생성 + 공개 리포 동기화 |
+
+### 스킬 파일 (`skills/`)
+| 파일 | 내용 |
+|------|------|
+| `gdscript-conventions.md` | 네이밍, JSON↔GDScript 매핑, 수정 금지 파일 |
+| `data-driven-design.md` | 데이터 파일 맵, 신규 수치 추가 절차, 싱글톤 목록 |
+| `asset-pipeline.md` | 라이브러리 규칙, 승격 절차, FBX 로딩 패턴 |
+
+### SCRATCHPAD (`memory/SCRATCHPAD.md`)
+모든 에이전트가 작업 시작 시 읽는 학습 파일:
+- 🔴 절대 규칙: `int`→`int_stat`, JSONC `//`만, `assets/` 수정 금지
+- ⚠️ 자주 발생하는 실수: passive skill effects[], FBX 클립명, HP바 look_at 방향
+- 💡 유용한 패턴: 카메라 이벤트 타이밍, 파벌 서클 조건부 표시
+
+### 공개 핸드오프 리포
+- `Iseulet/crown-falle-handoff` — Claude Desktop raw URL 접근
+- 동기화: `tools/sync_to_public.ps1` (proto→handoff 단방향)
+- Raw base: `https://raw.githubusercontent.com/Iseulet/crown-falle-handoff/main/`
 
 ---
 
@@ -138,6 +185,7 @@ assets/characters/{class}/ ← 승격된 실사용 에셋 (copy, not move)
 | Signal | `snake_case` 과거형 (e.g. `unit_moved`) |
 | JSON 키 | `snake_case` |
 | 수치 | JSON에만 — 코드에 매직 넘버 기재 금지 |
+| JSON int 키 | GDScript에서 `int_stat`으로 매핑 (예약어 충돌) |
 
 수정 금지:
 - `assets/` — Godot 에디터 전용 관리
@@ -157,44 +205,19 @@ assets/characters/{class}/ ← 승격된 실사용 에셋 (copy, not move)
 
 ---
 
-## 설계 문서 요약 (Doc 1~6)
+## 설계 문서 요약 (Doc 1~6 + 신규)
 
-### Doc 1 — 애니메이션 시스템 아키텍처
-- AnimationConfig (static class) — JSON 파싱
-- UnitRenderer3D.play_motion(name) — AnimPlayer(단순) / AnimTree(컴포지션) 분기
-- AnimEventDispatcher — ratio 기반 이벤트 발화
+### Doc 1~6 — 애니메이션/카메라 시스템 (완료)
+- Phase 0~6 전체 구현 완료 (2026-03-11)
+- 상세 내용: `handoff/plans/design/2026-03-11-doc*.md` 참조
 
-### Doc 2 — AnimEvent 구조 & 에디터 플러그인
-- 이벤트 타입: `hit_frame`, `sfx`, `fx`, `spawn_projectile`, `camera_effect`
-- `addons/anim_event_editor/` — 타임라인 UI, JSON 저장, composition 편집
+### Doc 7 — 환경 시스템 (2026-03-12, 완료)
+- `EnvironmentConfig.gd` + `EnvironmentBuilder.gd`
+- 맵 KEY별 조명/안개/하늘 자동 적용
 
-### Doc 3 — 모션 제작 워크플로우 & 컴포지션
-- Sequence: 연속 재생 (A → B → C)
-- Blend: 가중치 혼합
-- Layer: 본 마스크로 상/하체 분리
-- 새 모션 전에 기존 모션 조합 우선 검토
-
-### Doc 4 — 이동 & 방향 연출
-- `face_direction(target_pos)` — 즉시 회전
-- `face_direction_smooth(target_pos, duration)` — Tween 보간
-- 이동 Tween: 각 waypoint에서 방향 전환 → 이동 시작
-- 투사체: 비동기 — 공격자 즉시 idle 복귀
-
-### Doc 5 — 카메라 시스템 (데이터 기반)
-- `CameraDirector.execute(preset_name, context)` 단일 진입점
-- 프리셋 타입: base, shake, fov_pulse, tilt, soft_track, cinematic
-- 시네마틱 4종: drop(낙하), closeup(클로즈업), drift(드리프트), orbit(궤도)
-- combat_rules.json: 致命打/승리/패배 조건 및 연출 매핑
-
-### Doc 6 — 통합 구현 착수 순서
-- Phase 0: 데이터 JSON (완료)
-- Phase 1: AnimationConfig / CameraConfig 싱글톤 (완료)
-- Phase 2: UnitRenderer3D play_motion / AnimQueue / 방향 (완료)
-- Phase 3: AnimEventDispatcher + 이벤트 핸들러 (완료)
-- Phase 4: CameraDirector (경로 A/B/C, 시네마틱 4종) (완료)
-- Phase 5: CompositionBuilder + AnimationTree (완료)
-- Phase 6: 에디터 플러그인 (완료)
-- **다음: Phase B** — 원거리 공격 사거리, 투사체 비행, 스태미너
+### Doc 8 — 레벨 데코레이션 시스템 (2026-03-12, Godot 테스트 대기)
+- FBX 24종: 성채/마을/자연/야외 4테마
+- exterior(그리드 외) / interior(그리드 내, 스폰 제외) 분리 배치
 
 ---
 
@@ -209,3 +232,4 @@ assets/characters/{class}/ ← 승격된 실사용 에셋 (copy, not move)
 | 2026-03-11 | FBX 한 파일에 모든 클립 내장 패턴 확립 |
 | 2026-03-12 | HP 게이지 QuadMesh, 파벌 서클 CylinderMesh, `y=0.06` |
 | 2026-03-12 | 카메라 사망 이벤트: 즉시 발화 → animation_config ratio 0.45 |
+| 2026-03-12 | Git–Drive 에셋 분리: 바이너리는 gitignore, Drive가 백업 |
