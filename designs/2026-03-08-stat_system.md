@@ -34,11 +34,12 @@
 | 적중률   | HIT  | `base_hit_rate` + DEX × `dex_hit_coefficient` + 레벨 편차 × `level_diff_coefficient` | %, 상한/하한 적용 |
 | 이동     | MV   | 직업 기본값 + DEX × `dex_mv_coefficient`, floor() 처리 | 칸 수 (정수) |
 | 치명타   | CRIT | DEX × `dex_crit_coefficient` + 직업 보정값 | % |
-| 물리방어 | ARM  | CON × `con_arm_coefficient` | % 감소 방식 |
-| 마법저항 | RES  | WIL × `wil_res_coefficient` | % 감소 방식 |
+| 물리방어 | ARM  | CON × `arm_per_con` | **게이지형** — 물리 피격 시 게이지 먼저 차감. ARM > 0이면 물리 CC 면역. [2026-03-13 변경] |
+| 마법저항 | RES  | WIL × `res_per_wil` | **게이지형** — 마법 피격 시 게이지 먼저 차감. RES > 0이면 마법 CC 면역. [2026-03-13 변경] |
 
 > 마법 공격은 HIT 판정 없음 — 항상 명중
 > ARM/RES는 향후 장비 아이템 누적 적용 예정
+> [2026-03-13 변경] ARM/RES: %형(CON×0.3, WIL×0.3) 폐기 → 게이지형(CON×arm_per_con, WIL×res_per_wil)으로 전환
 
 ---
 
@@ -81,8 +82,13 @@
 기본 데미지 = STR × str_coefficient       (Fighter / Warrior)
            OR DEX × dex_dmg_coefficient   (Archer / Rogue)
 
-최종 데미지 = 기본 데미지 × (1 - ARM / 100)
-최소 데미지: 1
+[2026-03-13 변경] 데미지 흐름 — 게이지형:
+  ARM 게이지 > 0?
+    YES → ARM 게이지에서 차감: ARM = max(0, ARM - 기본 데미지)
+          초과 데미지는 HP로 전이하지 않음 (ARM이 흡수)
+          물리 CC 면역 유지 (ARM ≥ 1)
+    NO  → 기본 데미지를 HP에 직접 적용. 물리 CC 적용 가능.
+최소 HP 데미지: 1 (HP에 도달한 경우에만 적용)
 
 ※ 무기 보정치 추가 예정 (향후 무기 시스템)
 ```
@@ -91,8 +97,13 @@
 ```
 기본 데미지 = INT × int_coefficient
 
-최종 데미지 = 기본 데미지 × (1 - RES / 100)
-최소 데미지: 1
+[2026-03-13 변경] 데미지 흐름 — 게이지형:
+  RES 게이지 > 0?
+    YES → RES 게이지에서 차감: RES = max(0, RES - 기본 데미지)
+          초과 데미지는 HP로 전이하지 않음 (RES가 흡수)
+          마법 CC 면역 유지 (RES ≥ 1)
+    NO  → 기본 데미지를 HP에 직접 적용. 마법 CC 적용 가능.
+최소 HP 데미지: 1 (HP에 도달한 경우에만 적용)
 ```
 
 ### 4-4. 치명타
@@ -120,8 +131,8 @@ MP   = WIL × mp_per_wil
 HIT  = base_hit_rate + DEX × dex_hit_coefficient  (+ 레벨 편차 보정)
 MV   = 직업 기본값 + DEX × dex_mv_coefficient      → floor() 처리
 CRIT = DEX × dex_crit_coefficient + 직업 보정값    (%)
-ARM  = CON × con_arm_coefficient                    (%)
-RES  = WIL × wil_res_coefficient                    (%)
+ARM  = CON × arm_per_con                    (게이지) [2026-03-13 변경]
+RES  = WIL × res_per_wil                    (게이지) [2026-03-13 변경]
 ```
 
 ---
@@ -148,11 +159,16 @@ RES  = WIL × wil_res_coefficient                    (%)
     // MV(칸) = 직업 기본값 + DEX × 계수, floor() | 적용: 턴 시작 시 이동 범위 계산
     "dex_mv_coefficient": 0.2,
     // CRIT(%) = DEX × 계수 + 직업 보정값 | 적용: 치명타 확률 계산 시 (매 공격마다)
-    "dex_crit_coefficient": 0.5,
-    // ARM(%) = CON × 계수 | 적용: 물리 피격 시 데미지 감소 계산
-    "con_arm_coefficient": 0.3,
-    // RES(%) = WIL × 계수 | 적용: 마법 피격 시 데미지 감소 계산
-    "wil_res_coefficient": 0.3
+    "dex_crit_coefficient": 0.5
+    // [2026-03-13 변경] con_arm_coefficient(0.3), wil_res_coefficient(0.3) 제거 → armor 섹션으로 이전
+  },
+
+  // [2026-03-13 변경] ARM/RES 게이지 계수 — %형 폐기, 게이지형으로 전환
+  "armor": {
+    // ARM 게이지 = CON × arm_per_con | 적용: 유닛 초기화 / 물리 피격 시 차감
+    "arm_per_con": 3,
+    // RES 게이지 = WIL × res_per_wil | 적용: 유닛 초기화 / 마법 피격 시 차감
+    "res_per_wil": 3
   },
 
   // 적중률 계수 — 물리 공격 명중 판정 시 적용 (마법 공격은 항상 명중)
@@ -174,11 +190,8 @@ RES  = WIL × wil_res_coefficient                    (%)
     // 물리 데미지(원거리) = DEX × 계수 | 적용: Archer / Rogue 공격 시
     "dex_dmg_coefficient": 1.0,
     // 마법 데미지 = INT × 계수 | 적용: Mage 스킬/공격 시
-    "int_coefficient": 1.0,
-    // ARM 상한 — 초과 불가 (물리 데미지 완전 무효화 방지)
-    "arm_max": 80,
-    // RES 상한 — 초과 불가 (마법 데미지 완전 무효화 방지)
-    "res_max": 80
+    "int_coefficient": 1.0
+    // [2026-03-13 변경] arm_max(80), res_max(80) 제거 — 게이지형으로 전환하여 상한 개념 불필요
   },
 
   // 치명타 계수 — 명중 판정 이후, 치명타 발동 및 데미지 계산 시 적용

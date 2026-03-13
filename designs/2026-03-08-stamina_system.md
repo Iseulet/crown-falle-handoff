@@ -20,8 +20,12 @@
 | HP   | CON × 2 | 생존 |
 | STA  | sta_base + CON × sta_per_con | 물리 행동 (이동/공격/행동스킬/교전) |
 | MP   | WIL × 3 | 마법 행동 (마법스킬) |
+| VP   | 파티 인원 × 1 (파티 공유) | 궁극기, VP 이탈, 전투 중 부상 회복 [2026-03-13 추가] |
 
 > CON이 HP / STA / ARM 세 가지를 담당 → "육체적 내구도" 스탯으로 확립
+> [2026-03-13 변경] STA/MP 이원화 → **STA/MP/VP 삼원화** 구조로 확장.
+> VP(사기, Morale)는 파티 전체 공유 자원. 초기값 파티 인원 × 1 (4인 파티 = 4VP).
+> 참조: `handoff/plans/design/2026-03-13-combat-system-proposal-final.md` §3
 
 ---
 
