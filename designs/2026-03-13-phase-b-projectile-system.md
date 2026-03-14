@@ -1,652 +1,1035 @@
-# Phase B — Projectile System Design Document
+# CrownFalle — Phase B: 투사체 & 원거리 공격 시스템 설계
 
-> 🇰🇷 Phase B — 투사체 시스템 설계 문서
-
-**Date:** 2026-03-13
-**Author:** @Planner
-**Status:** Approved — Ready for Implementation
-**References:** Doc 2 (spawn_projectile event), Doc 4 (async principle), `distance_movement.md`
-
-> 🇰🇷 **날짜:** 2026-03-13 | **작성:** @Planner | **상태:** 승인 — 구현 준비 완료
-
----
-
-## 0. Core Constraint
-
-The non-negotiable principle from `CLAUDE.md`:
-
-> **투사체 비동기** — Projectile flight must NOT block the turn flow.
-> The attacker returns to idle immediately after its animation ends.
-> Damage landing is deferred to the projectile's `hit_arrived` signal.
-
-> 🇰🇷 **핵심 제약 (`CLAUDE.md` Non-Override)**
-> 투사체 비동기: 투사체 비행이 턴 흐름을 블로킹하면 안 됨.
-> 공격자는 자신의 애니메이션 종료 즉시 idle 복귀. 데미지는 `hit_arrived` 시그널로 지연 적용.
+- Date: 2026-03-13
+- Agent: @Planner
+- Status: 설계 완료 — 사용자 승인 대기
+- References:
+  - Doc 2 — `spawn_projectile` 이벤트 & `data/projectiles/` 데이터 구조
+  - Doc 4 섹션 4-2 — Archer 원거리 공격 시퀀스 (비동기 원칙)
+  - `data-driven-design.md` — 수치 외부화 원칙
+  - `distance_movement.md` — 공격 범위 전환 관련 열어둔 결정
+  - `2026-03-13-combat-system-proposal-final.md` — ARM/RES 게이지형 전환, 원소 6종
 
 ---
 
-## 1. Architecture Overview
+## 0. 확정 결정사항 요약
 
-> 🇰🇷 **아키텍처 개요**
+| # | 결정 | 선택 |
+|---|------|------|
+| 1 | 사거리 단위 | **타일 수 (정수)** — 헥스 맨해튼 거리 기반 |
+| 2 | 최소 사거리 (사각지대) | **있음** — Archer `min_range: 2`, 인접 공격 불가 |
+| 3 | Mage 공격 방식 | **스킬별 분기** — `delivery: "projectile"` / `"instant"` (JSON 정의) |
+| 4 | LOS (시야선) | **있음** — 직선 경로상 장애물 타일 시 공격 불가 |
+| 5 | 투사체 비동기 | **확정** (Doc 4) — 발사 즉시 공격자 idle 복귀 |
+| 6 | 투사체 비주얼 | **프리미티브 먼저** — CylinderMesh(화살)/SphereMesh(마법탄), 에셋은 후일 교체 |
+| 7 | 설계 범위 | **풀** — 비행 + 사거리 + 카메라 + FX + Archer/Mage 클래스별 분기 |
 
-### 1.1 Visual-Only Projectile Pattern
+---
+
+## 1. 사거리 시스템
+
+### 1-1. 공격 범위 계산
+
+헥스 맨해튼 거리(hex distance)를 사용한다.
+Staggered Grid에서 두 타일 간 hex distance는 cube 좌표로 변환 후 계산한다.
 
 ```
-_resolve_attack()           # pre-calculates ALL damage upfront, no randomness later
-  ↓                         # 데미지 전체를 미리 계산 — 이후 랜덤 없음
-store _dispatch_* vars      # CombatScene-level snapshot
-  ↓
-animation plays
-  ↓  ratio 0.40 → spawn_projectile event fires
-_handle_spawn_projectile()  # packs context Dict (VALUE COPY), calls ProjectileManager.spawn()
-  ↓                         # 컨텍스트 딕셔너리(값 복사본) 생성 후 spawn() 호출
-Projectile flies (async)    # attacker immediately returns to idle
-  ↓  hit_arrived signal     # 공격자는 즉시 idle 복귀
-_on_projectile_hit(ctx)     # restores _dispatch_* from snapshot, calls _handle_hit_frame()
-                            # 스냅샷에서 _dispatch_* 복원 후 _handle_hit_frame() 호출
+hex_distance(a, b):
+  1. offset → cube 변환
+  2. max(|a.q - b.q|, |a.r - b.r|, |a.s - b.s|)
 ```
-
-### 1.2 New Files (3)
-
-> 🇰🇷 **신규 파일 3종**
-
-| File | Role |
-|------|------|
-| `scripts/combat/Projectile.gd` | Flies A→B, emits `hit_arrived` |
-| `scripts/combat/ProjectileManager.gd` | Scene-level spawner & active projectile tracker |
-| `scripts/singletons/ProjectileConfig.gd` | Loads `data/projectiles/*.json` |
-
-> 🇰🇷 `Projectile.gd`: A→B 비행 후 `hit_arrived` 발생. `ProjectileManager.gd`: 씬 수준 스포너, 활성 투사체 추적. `ProjectileConfig.gd`: `data/projectiles/*.json` 로딩 싱글톤.
-
-### 1.3 Modified Files
-
-> 🇰🇷 **수정 파일**
-
-| File | Change |
-|------|--------|
-| `CombatScene.gd` | `_handle_spawn_projectile()` full impl; new `_on_projectile_hit()`; engagement guard |
-| `CombatUnit.gd` | Add `get_attack_range()` |
-| `GridManager.gd` | Add `grid_distance()`, `get_cells_in_range()` |
-| `animation_config.json` | `attack_ranged`: `hit_frame@0.55` → `spawn_projectile@0.40` |
-| `class_config.json` | Add `attack_range` + `projectile` per class |
-| `data/projectiles/*.json` | Extend schema (`sfx_launch`, `arc_height`, `rotate_to_velocity`) |
-
----
-
-## 2. ProjectileConfig.gd (Singleton)
-
-> 🇰🇷 **ProjectileConfig.gd (싱글톤)** — `project.godot`에 오토로드 등록
-
-**Path:** `scripts/singletons/ProjectileConfig.gd`
-Registered in `project.godot` autoloads as `ProjectileConfig`.
 
 ```gdscript
+# GridManager.gd — 신규 함수
+
+## offset(col, row) → cube(q, r, s) 변환 (staggered column 기준)
+static func offset_to_cube(col: int, row: int) -> Vector3i:
+    var q := col
+    var r := row - (col - (col & 1)) / 2
+    var s := -q - r
+    return Vector3i(q, r, s)
+
+## 두 타일 간 헥스 거리
+static func hex_distance(a: Vector2i, b: Vector2i) -> int:
+    var ac := offset_to_cube(a.x, a.y)
+    var bc := offset_to_cube(b.x, b.y)
+    return maxi(maxi(absi(ac.x - bc.x), absi(ac.y - bc.y)), absi(ac.z - bc.z))
+```
+
+### 1-2. 공격 가능 타일 조회
+
+```gdscript
+# GridManager.gd — 신규 함수
+func get_cells_in_attack_range(
+    origin: Vector2i,
+    range_max: int,
+    range_min: int = 1
+) -> Array[Vector2i]:
+    var result: Array[Vector2i] = []
+    for y in range(_grid_height):
+        for x in range(_grid_width):
+            var cell := Vector2i(x, y)
+            if cell == origin:
+                continue
+            var dist := hex_distance(origin, cell)
+            if dist >= range_min and dist <= range_max:
+                result.append(cell)
+    return result
+```
+
+### 1-3. 클래스별 사거리 JSON
+
+```jsonc
+// data/classes/archer.json (attack_range 필드 추가)
+{
+    "attack_type": "ranged",
+    "attack_range_max": 4,
+    "attack_range_min": 2,
+    // ... 기존 필드 유지
+}
+
+// data/classes/mage.json
+{
+    "attack_type": "ranged",
+    "attack_range_max": 5,
+    "attack_range_min": 0,
+    // min 0 = 인접 시전 가능 (instant 스킬 등)
+}
+
+// data/classes/fighter.json
+{
+    "attack_type": "melee",
+    "attack_range_max": 1,
+    "attack_range_min": 1,
+    // 기존 인접 6방향과 동일
+}
+
+// data/classes/rogue.json
+{
+    "attack_type": "melee",
+    "attack_range_max": 1,
+    "attack_range_min": 1,
+}
+```
+
+> [DECISION] 근접(melee)은 range_max=1, range_min=1으로 기존 인접 판정과 동일하게 유지.
+> [DECISION] `get_attack_neighbors()`는 `get_cells_in_attack_range(origin, 1, 1)`의 래퍼로 리팩터링.
+
+### 1-4. Archer 인접 공격 불가 정책
+
+Archer(min_range=2)가 적과 인접(hex_distance=1)한 경우:
+
+- 원거리 공격 **불가** (사각지대)
+- 근접 대체 공격 없음 (무방비 상태)
+- 교전(Engagement) 성립 시 이동 제한은 기존 시스템 그대로 적용
+- UI: 인접 적은 공격 대상 하이라이트에서 제외
+
+> [DECISION] Archer 인접 페널티 공격(약한 근접)은 프로토타입 범위 밖.
+> 향후 패시브 스킬("Survival Instinct" 등)로 추가 가능.
+
+---
+
+## 2. LOS (Line of Sight) 시스템
+
+### 2-1. 판정 방식
+
+공격자 타일 → 대상 타일 직선 경로상의 모든 중간 타일을 순회하여,
+장애물(`is_walkable() == false`)이 있으면 공격 불가로 판정.
+
+유닛이 점유한 타일은 LOS를 차단하지 **않는다** (아군/적군 모두 통과).
+
+```gdscript
+# GridManager.gd — 신규 함수
+func has_line_of_sight(from: Vector2i, to: Vector2i) -> bool:
+    var dist := hex_distance(from, to)
+    if dist <= 1:
+        return true  # 인접은 항상 시야 확보
+
+    # cube 좌표 기반 직선 보간
+    var from_cube := Vector3(offset_to_cube(from.x, from.y))
+    var to_cube := Vector3(offset_to_cube(to.x, to.y))
+
+    for i in range(1, dist):
+        var t := float(i) / float(dist)
+        var lerped := from_cube.lerp(to_cube, t)
+        # cube → offset 역변환 (round to nearest hex)
+        var rounded := _cube_round(lerped)
+        var mid := cube_to_offset(rounded)
+
+        if mid == from or mid == to:
+            continue
+        if not is_walkable(mid):
+            return false
+
+    return true
+```
+
+### 2-2. Cube 좌표 보조 함수
+
+```gdscript
+# GridManager.gd — 보조 함수
+
+static func _cube_round(cube: Vector3) -> Vector3i:
+    var q := roundi(cube.x)
+    var r := roundi(cube.y)
+    var s := roundi(cube.z)
+
+    var q_diff := absf(float(q) - cube.x)
+    var r_diff := absf(float(r) - cube.y)
+    var s_diff := absf(float(s) - cube.z)
+
+    if q_diff > r_diff and q_diff > s_diff:
+        q = -r - s
+    elif r_diff > s_diff:
+        r = -q - s
+    else:
+        s = -q - r
+
+    return Vector3i(q, r, s)
+
+static func cube_to_offset(cube: Vector3i) -> Vector2i:
+    var col := cube.x
+    var row := cube.y + (cube.x - (cube.x & 1)) / 2
+    return Vector2i(col, row)
+```
+
+### 2-3. 공격 가능 최종 판정
+
+```gdscript
+# CombatScene.gd 또는 ActionResolver에서 사용
+func get_valid_attack_targets(
+    attacker: CombatUnit,
+    range_max: int,
+    range_min: int
+) -> Array[Vector2i]:
+    var cells := grid_manager.get_cells_in_attack_range(
+        attacker.grid_pos, range_max, range_min
+    )
+    var targets: Array[Vector2i] = []
+    for cell in cells:
+        if not grid_manager.is_occupied_by_enemy(cell, attacker.faction):
+            continue
+        if not grid_manager.has_line_of_sight(attacker.grid_pos, cell):
+            continue
+        targets.append(cell)
+    return targets
+```
+
+### 2-4. LOS 시각화 (선택적)
+
+공격 대상 하이라이트 시 LOS 실패 타일은 표시하지 않는다.
+디버그 모드에서는 LOS 실패 경로를 회색 점선으로 표시할 수 있다 (후순위).
+
+---
+
+## 3. 투사체 시스템
+
+### 3-1. 아키텍처 개요
+
+```
+AnimEventDispatcher
+  "spawn_projectile" 이벤트 발화
+        │
+        ▼
+CombatScene._handle_spawn_projectile(event_data, context)
+  ① ProjectileManager.spawn(config, start_pos, target_pos, context)
+  ② 공격자 → idle 복귀 (비동기)
+        │
+        ▼
+ProjectileManager
+  ① Projectile 씬 인스턴스 생성
+  ② 비행 Tween 시작 (직선 or 포물선)
+  ③ 도착 시 → projectile_arrived 시그널
+        │
+        ▼
+CombatScene._on_projectile_arrived(context)
+  ① 대상 receive_hit() 호출
+  ② FX/SFX 재생
+  ③ 카메라 효과 (hit 프리셋)
+```
+
+### 3-2. 투사체 데이터 (기존 Doc 2 확장)
+
+```jsonc
+// data/projectiles/arrow.json
+{
+    "type": "arrow",
+    "speed": 12.0,            // 월드 단위/초
+    "trajectory": "linear",   // "linear" | "arc"
+    "arc_height": 0.0,        // arc일 때만 사용
+    "rotate_to_direction": true,  // 비행 방향으로 회전 여부
+    "fx_trail": "fx_arrow_trail",
+    "fx_hit": "fx_arrow_impact",
+    "sfx_launch": "sfx_arrow_shoot",
+    "sfx_hit": "sfx_arrow_hit",
+    "camera_on_hit": "shake_light",  // 도착 시 카메라 프리셋 (빈 문자열이면 없음)
+    // 비주얼 (프리미티브)
+    "visual": {
+        "mesh_type": "cylinder",   // "cylinder" | "sphere" | "custom"
+        "mesh_scale": [0.03, 0.3, 0.03],
+        "color": [0.55, 0.35, 0.15, 1.0]
+    }
+}
+
+// data/projectiles/magic_bolt.json
+{
+    "type": "magic_bolt",
+    "speed": 10.0,
+    "trajectory": "linear",
+    "arc_height": 0.0,
+    "rotate_to_direction": false,
+    "fx_trail": "fx_magic_trail",
+    "fx_hit": "fx_magic_burst",
+    "sfx_launch": "sfx_magic_cast",
+    "sfx_hit": "sfx_magic_hit",
+    "camera_on_hit": "shake_light",
+    "visual": {
+        "mesh_type": "sphere",
+        "mesh_scale": [0.15, 0.15, 0.15],
+        "color": [0.3, 0.5, 1.0, 1.0]
+    }
+}
+
+// data/projectiles/throw_stone.json
+{
+    "type": "throw_stone",
+    "speed": 8.0,
+    "trajectory": "arc",
+    "arc_height": 2.0,
+    "rotate_to_direction": false,
+    "fx_trail": "",
+    "fx_hit": "fx_dust_hit",
+    "sfx_launch": "sfx_throw",
+    "sfx_hit": "sfx_stone_hit",
+    "camera_on_hit": "",
+    "visual": {
+        "mesh_type": "sphere",
+        "mesh_scale": [0.08, 0.08, 0.08],
+        "color": [0.5, 0.45, 0.4, 1.0]
+    }
+}
+```
+
+### 3-3. ProjectileConfig 로더
+
+```gdscript
+# scripts/singletons/ProjectileConfig.gd
 class_name ProjectileConfig
 extends Node
 
-# Loaded once at startup from data/projectiles/*.json.
-# 시작 시 data/projectiles/*.json 전체 로드 — 이후 get_config()로 조회.
+## 싱글톤 — data/projectiles/*.json 파싱
+
 const DATA_DIR := "res://data/projectiles/"
 
-var _configs: Dictionary = {}  # id → Dictionary
+var _cache: Dictionary = {}  # type → config dict
 
 func _ready() -> void:
     _load_all()
 
 func _load_all() -> void:
     var dir := DirAccess.open(DATA_DIR)
-    if dir == null:
-        push_error("[ProjectileConfig] Cannot open: %s" % DATA_DIR)
+    if not dir:
         return
     dir.list_dir_begin()
-    var fname := dir.get_next()
-    while fname != "":
-        if fname.ends_with(".json"):
-            var id := fname.get_basename()
-            var text := FileAccess.get_file_as_string(DATA_DIR + fname)
-            var parsed: Variant = JSON.parse_string(text)
-            if parsed is Dictionary:
-                _configs[id] = parsed
-            else:
-                push_warning("[ProjectileConfig] Parse failed: %s" % fname)
-        fname = dir.get_next()
+    var file_name := dir.get_next()
+    while file_name != "":
+        if file_name.ends_with(".json"):
+            var path := DATA_DIR + file_name
+            var data := _parse_json(path)
+            if data.has("type"):
+                _cache[data.type] = data
+        file_name = dir.get_next()
 
-# Returns config dict for id; empty dict if not found.
-# id에 해당하는 설정 반환. 없으면 빈 딕셔너리.
-func get_config(id: String) -> Dictionary:
-    return _configs.get(id, {})
+func get_config(type: String) -> Dictionary:
+    if _cache.has(type):
+        return _cache[type]
+    push_warning("ProjectileConfig: unknown type '%s'" % type)
+    return {}
+
+func _parse_json(path: String) -> Dictionary:
+    var file := FileAccess.open(path, FileAccess.READ)
+    if not file:
+        return {}
+    var text := file.get_as_text()
+    var json := JSON.new()
+    if json.parse(text) == OK:
+        return json.data
+    return {}
 ```
 
----
+### 3-4. Projectile 씬 & 스크립트
 
-## 3. Projectile.gd
-
-> 🇰🇷 **Projectile.gd** — 개별 투사체 비행 로직
-
-**Path:** `scripts/combat/Projectile.gd`
-
-### 3.1 Public API
+```
+scenes/combat/projectile.tscn
+  Projectile (Node3D)
+    └── MeshInstance3D    ← 동적 생성 (config.visual 기반)
+```
 
 ```gdscript
+# scripts/combat/Projectile.gd
 class_name Projectile
 extends Node3D
 
-# Emitted when the projectile reaches its destination.
-# context = pre-calculated damage data (value copy from _handle_spawn_projectile).
-# 투사체 목표 도달 시 발생. context = 미리 계산된 데미지 데이터 (값 복사본).
-signal hit_arrived(context: Dictionary)
+signal arrived(context: Dictionary)
 
-# Configure from JSON config, flight endpoints, and damage context.
-# Call once before launch(). Do NOT call twice.
-# JSON 설정, 비행 시작/끝 위치, 데미지 컨텍스트로 초기화. launch() 전 한 번만 호출.
-func setup(config: Dictionary, start_pos: Vector3, end_pos: Vector3, context: Dictionary) -> void
+var _config: Dictionary = {}
+var _target_pos: Vector3
+var _context: Dictionary = {}
+var _speed: float = 10.0
+var _trajectory: String = "linear"
+var _arc_height: float = 0.0
 
-# Begin flight. Called by ProjectileManager immediately after setup().
-# 비행 시작. ProjectileManager가 setup() 직후 호출.
-func launch() -> void
-```
+func setup(config: Dictionary, start: Vector3, target: Vector3, context: Dictionary) -> void:
+    _config = config
+    _target_pos = target
+    _context = context
+    _speed = config.get("speed", 10.0)
+    _trajectory = config.get("trajectory", "linear")
+    _arc_height = config.get("arc_height", 0.0)
+    global_position = start
+    _create_visual(config.get("visual", {}))
+    _start_flight()
 
-### 3.2 Straight-Line Flight (`arc: false`)
+func _create_visual(visual: Dictionary) -> void:
+    var mesh_inst := MeshInstance3D.new()
+    var mesh_type: String = visual.get("mesh_type", "sphere")
 
-> 🇰🇷 **직선 비행** — `arc: false` 설정 시 Tween으로 직선 이동
+    match mesh_type:
+        "cylinder":
+            var m := CylinderMesh.new()
+            m.top_radius = 0.02
+            m.bottom_radius = 0.02
+            m.height = 0.3
+            mesh_inst.mesh = m
+        "sphere":
+            var m := SphereMesh.new()
+            m.radius = 0.1
+            m.height = 0.2
+            mesh_inst.mesh = m
+        _:
+            var m := SphereMesh.new()
+            mesh_inst.mesh = m
 
-```gdscript
-func _fly_straight(duration: float) -> void:
+    # 스케일 적용
+    var s: Array = visual.get("mesh_scale", [0.1, 0.1, 0.1])
+    mesh_inst.scale = Vector3(s[0], s[1], s[2])
+
+    # 머티리얼 색상
+    var mat := StandardMaterial3D.new()
+    var c: Array = visual.get("color", [1.0, 1.0, 1.0, 1.0])
+    mat.albedo_color = Color(c[0], c[1], c[2], c[3])
+    mat.emission_enabled = true
+    mat.emission = Color(c[0], c[1], c[2])
+    mat.emission_energy_multiplier = 0.3
+    mesh_inst.material_override = mat
+
+    add_child(mesh_inst)
+
+func _start_flight() -> void:
+    var dist := global_position.distance_to(_target_pos)
+    var duration := dist / _speed
+
+    # 방향 회전
+    if _config.get("rotate_to_direction", false):
+        look_at(_target_pos, Vector3.UP)
+
+    match _trajectory:
+        "linear":
+            _fly_linear(duration)
+        "arc":
+            _fly_arc(duration)
+        _:
+            _fly_linear(duration)
+
+func _fly_linear(duration: float) -> void:
     var tween := create_tween()
-    tween.tween_property(self, "position", _end_pos, duration)
-    await tween.finished
-    _on_arrived()
-```
-
-### 3.3 Arc Flight (`arc: true`)
-
-> 🇰🇷 **포물선 비행** — `arc: true` 설정 시 포물선 공식 적용
-
-```gdscript
-# Parabola: height_offset = arc_height × 4 × t × (1 - t),  t ∈ [0,1]
-# 포물선: 높이 오프셋 = arc_height × 4 × t × (1 - t)
-func _update_arc_position(t: float) -> void:
-    var base_pos: Vector3 = _start_pos.lerp(_end_pos, t)
-    base_pos.y += _arc_height * 4.0 * t * (1.0 - t)
-    position = base_pos
+    tween.tween_property(self, "global_position", _target_pos, duration)
+    tween.tween_callback(_on_arrived)
 
 func _fly_arc(duration: float) -> void:
+    var start := global_position
     var tween := create_tween()
-    tween.tween_method(_update_arc_position, 0.0, 1.0, duration)
-    await tween.finished
-    _on_arrived()
-```
+    var elapsed := 0.0
 
-### 3.4 Arrival & Cleanup
+    # 프레임별 위치 계산 — _process 사용
+    set_meta("arc_start", start)
+    set_meta("arc_duration", duration)
+    set_meta("arc_elapsed", 0.0)
+    set_process(true)
 
-> 🇰🇷 **도달 처리 및 정리** — VFX/SFX는 Phase B-4 이후 구현
+func _process(delta: float) -> void:
+    if not has_meta("arc_start"):
+        return
 
-```gdscript
+    var start: Vector3 = get_meta("arc_start")
+    var duration: float = get_meta("arc_duration")
+    var elapsed: float = get_meta("arc_elapsed") + delta
+    set_meta("arc_elapsed", elapsed)
+
+    var t := clampf(elapsed / duration, 0.0, 1.0)
+
+    # XZ 선형 보간
+    var pos := start.lerp(_target_pos, t)
+    # Y 포물선: 4h * t * (1-t)
+    pos.y += _arc_height * 4.0 * t * (1.0 - t)
+
+    global_position = pos
+
+    if t >= 1.0:
+        set_process(false)
+        remove_meta("arc_start")
+        remove_meta("arc_duration")
+        remove_meta("arc_elapsed")
+        _on_arrived()
+
 func _on_arrived() -> void:
-    # B-4+: play fx_hit, sfx_hit here
-    # B-4+: 여기서 fx_hit, sfx_hit 재생
-    print("[PROJ] hit → %s" % _config.get("fx_hit", ""))
-    hit_arrived.emit(_context)
+    arrived.emit(_context)
+    # FX/SFX는 ProjectileManager가 시그널 수신 후 처리
     queue_free()
 ```
 
-### 3.5 Placeholder Mesh
-
-> 🇰🇷 **임시 메시** — Phase 4+에서 실제 GLB 에셋으로 교체
+### 3-5. ProjectileManager
 
 ```gdscript
-func _build_placeholder_mesh() -> void:
-    var mesh_inst := MeshInstance3D.new()
-    add_child(mesh_inst)
-    match _config.get("type", ""):
-        "arrow":
-            var m := CylinderMesh.new()
-            m.height = 0.4
-            m.top_radius = 0.01
-            m.bottom_radius = 0.04
-            mesh_inst.mesh = m
-        _:  # magic_bolt, throw_stone
-            var m := SphereMesh.new()
-            m.radius = 0.08
-            mesh_inst.mesh = m
-```
-
----
-
-## 4. ProjectileManager.gd
-
-> 🇰🇷 **ProjectileManager.gd** — CombatScene 자식 노드, 씬 수준 스포너
-
-**Path:** `scripts/combat/ProjectileManager.gd`
-Added as child node of `CombatScene`. Not a singleton — follows TurnManager/GridManager pattern.
-
-> 🇰🇷 `CombatScene`의 자식 노드로 추가. 싱글톤 아님 — TurnManager/GridManager 패턴과 동일.
-
-```gdscript
+# scripts/combat/ProjectileManager.gd
 class_name ProjectileManager
-extends Node
+extends Node3D
 
-var _active: Array[Projectile] = []
+## 투사체 생성/관리, CombatScene의 자식 노드로 배치
 
-# Spawn a projectile and begin flight immediately.
-# Caller connects hit_arrived on the returned node.
-# 투사체 스폰 후 즉시 비행 시작. 반환 노드에 hit_arrived 연결 권장.
+signal projectile_arrived(context: Dictionary)
+
+const PROJECTILE_SCENE := preload("res://scenes/combat/projectile.tscn")
+
+var _active_projectiles: Array[Projectile] = []
+
 func spawn(
-    projectile_id: String,
+    projectile_type: String,
     start_pos: Vector3,
-    end_pos: Vector3,
+    target_pos: Vector3,
     context: Dictionary
-) -> Projectile:
-    var cfg: Dictionary = ProjectileConfig.get_config(projectile_id)
-    if cfg.is_empty():
-        push_warning("[ProjectileManager] Unknown id: '%s'" % projectile_id)
-        return null
-
-    var proj := Projectile.new()
-    add_child(proj)
-    _active.append(proj)
-    proj.tree_exiting.connect(func() -> void: _active.erase(proj))
-
-    proj.setup(cfg, start_pos, end_pos, context)
-    proj.launch()
-    return proj
-
-# Emergency cleanup — call on combat end to free any in-flight projectiles.
-# 전투 종료 시 비행 중 투사체 강제 정리.
-func clear_all() -> void:
-    for p in _active.duplicate():
-        if is_instance_valid(p):
-            p.queue_free()
-    _active.clear()
-```
-
----
-
-## 5. CombatScene.gd Integration
-
-> 🇰🇷 **CombatScene.gd 연동**
-
-### 5.1 animation_config.json Change
-
-> 🇰🇷 **`animation_config.json` 수정** — `attack_ranged` 이벤트 변경
-
-Replace `hit_frame@0.55` with `spawn_projectile@0.40` in `attack_ranged`.
-`cast_spell` is **unchanged** — Mage `basic_attack` remains instant (`hit_frame`).
-
-> 🇰🇷 `attack_ranged`의 `hit_frame@0.55`를 `spawn_projectile@0.40`으로 교체.
-> `cast_spell`은 **수정 없음** — 마법사 기본 공격은 hit_frame 즉발 유지.
-
-**Before (`attack_ranged`):**
-```json
-{ "ratio": 0.55, "type": "hit_frame",     "data": {} },
-{ "ratio": 0.55, "type": "camera_effect", "data": { "preset": "shake_light" } }
-```
-
-**After (`attack_ranged`):**
-```json
-{ "ratio": 0.40, "type": "spawn_projectile", "data": { "projectile": "arrow" } }
-```
-
-> 🇰🇷 `shake_light`는 `_on_projectile_hit()` 내부에서 투사체 도달 시 대상 위치 기준으로 트리거.
-
-### 5.2 _handle_spawn_projectile() — Full Implementation
-
-> 🇰🇷 **`_handle_spawn_projectile()` 전체 구현** — CombatScene.gd 812번째 줄 교체
-
-```gdscript
-func _handle_spawn_projectile(event: Dictionary) -> void:
-    var data: Dictionary = event.get("data", {})
-    var proj_id: String = data.get("projectile", "")
-    if proj_id.is_empty():
-        push_warning("[PROJ] spawn_projectile event missing 'projectile' key")
+) -> void:
+    var config := ProjectileConfig.get_config(projectile_type)
+    if config.is_empty():
+        push_warning("ProjectileManager: no config for '%s'" % projectile_type)
+        # 설정 없으면 즉시 도착 처리 (graceful fallback)
+        projectile_arrived.emit(context)
         return
 
-    # Attacker chest height (+1.2m), target body center (+0.9m).
-    # 공격자 가슴 높이(+1.2m) → 대상 몸통 중심(+0.9m) 경로.
-    var start_pos: Vector3 = _dispatch_attacker.global_position + Vector3(0.0, 1.2, 0.0)
-    var end_pos: Vector3   = _dispatch_target.global_position   + Vector3(0.0, 0.9, 0.0)
+    var proj: Projectile = PROJECTILE_SCENE.instantiate()
+    add_child(proj)
+    _active_projectiles.append(proj)
 
-    # VALUE COPY — critical for concurrent projectile isolation.
-    # 값 복사 필수 — 동시 비행 투사체 간 컨텍스트 오염 방지.
-    var ctx: Dictionary = {
-        "attacker":        _dispatch_attacker,
-        "target":          _dispatch_target,
-        "atk_ctx":         _dispatch_atk_ctx.duplicate(),
-        "did_hit":         _dispatch_did_hit,
-        "final_dmg":       _dispatch_final_dmg,
-        "did_crit":        _dispatch_did_crit,
-        "dmg_before_crit": _dispatch_dmg_before_crit,
-        "back_bonus":      _dispatch_back_bonus,
-        "hit_chance":      _dispatch_hit_chance,
-        "is_magic":        _dispatch_is_magic,
+    proj.arrived.connect(_on_projectile_arrived.bind(proj, config))
+    proj.setup(config, start_pos, target_pos, context)
+
+    # 발사 SFX
+    var sfx_launch: String = config.get("sfx_launch", "")
+    if sfx_launch != "":
+        _play_sfx(sfx_launch)
+
+func _on_projectile_arrived(context: Dictionary, proj: Projectile, config: Dictionary) -> void:
+    _active_projectiles.erase(proj)
+
+    # 도착 FX
+    var fx_hit: String = config.get("fx_hit", "")
+    if fx_hit != "":
+        _spawn_fx(fx_hit, proj.global_position)
+
+    # 도착 SFX
+    var sfx_hit: String = config.get("sfx_hit", "")
+    if sfx_hit != "":
+        _play_sfx(sfx_hit)
+
+    # 도착 카메라 효과
+    var camera_preset: String = config.get("camera_on_hit", "")
+    if camera_preset != "":
+        CameraDirector.execute(camera_preset, context)
+
+    projectile_arrived.emit(context)
+
+func has_active_projectiles() -> bool:
+    return not _active_projectiles.is_empty()
+
+# --- 플레이스홀더 (Phase B FX 미구현 시) ---
+
+func _play_sfx(_sfx_name: String) -> void:
+    pass  # TODO: SFX 시스템 연결
+
+func _spawn_fx(_fx_name: String, _pos: Vector3) -> void:
+    pass  # TODO: FX 시스템 연결
+```
+
+---
+
+## 4. 공격 전달 방식 분기 (Delivery System)
+
+### 4-1. 스킬/액션 JSON에 delivery 필드 추가
+
+```jsonc
+// data/classes/archer.json — actions 필드
+{
+    "actions": {
+        "basic_attack": {
+            "motion_name": "attack_ranged",
+            "delivery": "projectile",
+            "projectile_type": "arrow",
+            "damage_stat": "dex"
+        }
+    }
+}
+
+// data/classes/mage.json — actions 필드
+{
+    "actions": {
+        "basic_attack": {
+            "motion_name": "cast_spell",
+            "delivery": "projectile",
+            "projectile_type": "magic_bolt",
+            "damage_stat": "int_stat"
+        },
+        "fire_burst": {
+            "motion_name": "cast_spell",
+            "delivery": "instant",
+            "projectile_type": "",
+            "damage_stat": "int_stat",
+            "fx_on_target": "fx_fire_burst",
+            "sfx_on_target": "sfx_fire_hit"
+        }
+    }
+}
+
+// data/classes/fighter.json — actions 필드
+{
+    "actions": {
+        "basic_attack": {
+            "motion_name": "attack_melee",
+            "delivery": "melee",
+            "projectile_type": "",
+            "damage_stat": "str"
+        }
+    }
+}
+```
+
+### 4-2. delivery 분기 흐름
+
+```
+CombatScene._execute_attack(attacker, target, action_data)
+  │
+  ├── delivery == "melee"
+  │     → 기존 흐름: hit_frame 이벤트 → receive_hit()
+  │
+  ├── delivery == "projectile"
+  │     → spawn_projectile 이벤트 → ProjectileManager.spawn()
+  │     → 공격자 즉시 idle 복귀
+  │     → projectile_arrived → receive_hit()
+  │
+  └── delivery == "instant"
+        → 시전 모션 재생
+        → hit_frame 이벤트 시점에 즉시 대상 위치 FX 생성
+        → receive_hit() 동시 호출
+        → 공격자 모션 완료 후 idle 복귀
+```
+
+### 4-3. instant 전달 상세
+
+instant는 투사체 없이 시전 모션의 `hit_frame` 이벤트에서 직접 피해를 적용한다.
+melee와의 차이는 **사거리가 1 초과**일 수 있다는 점과, **대상 위치에 FX가 발생**한다는 점.
+
+```gdscript
+# CombatScene.gd — _handle_hit_frame() 수정
+func _handle_hit_frame(event_data: Dictionary) -> void:
+    var action := _current_action_data  # 현재 실행 중인 액션 정보
+
+    if action.delivery == "instant":
+        # 대상 위치에 FX 즉시 생성
+        var fx_name: String = action.get("fx_on_target", "")
+        if fx_name != "":
+            _spawn_fx_at(fx_name, _dispatch_target.global_position)
+
+    # 피해 적용 (melee, instant 공통)
+    _apply_damage_to_target(event_data)
+```
+
+---
+
+## 5. CombatScene 통합 흐름
+
+### 5-1. 공격 타일 하이라이트 분기
+
+```gdscript
+# CombatScene.gd — _show_attack_highlights() 수정
+func _show_attack_highlights(unit: CombatUnit) -> void:
+    var class_data := unit.get_class_data()
+    var attack_type: String = class_data.get("attack_type", "melee")
+
+    match attack_type:
+        "melee":
+            # 기존: 인접 6방향 적 타일만 빨간 하이라이트
+            var neighbors := grid_manager.get_cells_in_attack_range(
+                unit.grid_pos, 1, 1
+            )
+            _highlight_attack_targets(unit, neighbors)
+        "ranged":
+            var range_max: int = class_data.get("attack_range_max", 4)
+            var range_min: int = class_data.get("attack_range_min", 2)
+            var cells := grid_manager.get_cells_in_attack_range(
+                unit.grid_pos, range_max, range_min
+            )
+            # LOS 필터링
+            var valid: Array[Vector2i] = []
+            for cell in cells:
+                if grid_manager.has_line_of_sight(unit.grid_pos, cell):
+                    valid.append(cell)
+            _highlight_attack_targets(unit, valid)
+```
+
+### 5-2. 공격 실행 분기
+
+```gdscript
+# CombatScene.gd — _attack_target() 재구조화
+func _attack_target(target_pos: Vector2i) -> void:
+    var attacker := selected_unit
+    var target := grid_manager.get_occupant(target_pos)
+    var action := _get_current_action(attacker)  # actions.basic_attack 등
+
+    # 방향 처리 (모든 공격 공통)
+    attacker._renderer.face_direction(target.global_position)
+    target._renderer.face_direction_smooth(attacker.global_position)
+
+    # 모션 재생
+    var motion_name: String = action.get("motion_name", "attack_melee")
+    attacker._renderer.play_motion(motion_name)
+
+    # delivery에 따른 분기는 이벤트 핸들러에서 처리
+    _current_action_data = action
+    _dispatch_attacker = attacker
+    _dispatch_target = target
+```
+
+### 5-3. spawn_projectile 이벤트 핸들러
+
+```gdscript
+# CombatScene.gd — 신규 (AnimEventDispatcher 시그널 연결)
+func _handle_spawn_projectile(event_data: Dictionary) -> void:
+    var proj_type: String = event_data.data.get("type", "")
+    var bone_name: String = event_data.data.get("bone", "RightHand")
+
+    # 발사 위치: 본 위치 or 공격자 위치
+    var start_pos: Vector3 = _dispatch_attacker._renderer.get_bone_position(bone_name)
+    var target_pos: Vector3 = _dispatch_target.global_position
+    # 타겟 약간 위 (몸통 중심)
+    target_pos.y += 0.7
+
+    var context := {
+        "attacker": _dispatch_attacker,
+        "target": _dispatch_target,
+        "action_data": _current_action_data,
+        "event_data": event_data
     }
 
-    var proj: Projectile = projectile_manager.spawn(proj_id, start_pos, end_pos, ctx)
-    if proj != null:
-        proj.hit_arrived.connect(_on_projectile_hit)
+    _projectile_manager.spawn(proj_type, start_pos, target_pos, context)
+
+    # 비동기: 공격자 즉시 idle 복귀
+    _dispatch_attacker._renderer.play_motion("idle")
 ```
 
-### 5.3 _on_projectile_hit() — New Function
-
-> 🇰🇷 **`_on_projectile_hit()` 신규 함수** — 투사체 도달 콜백
+### 5-4. 투사체 도착 핸들러
 
 ```gdscript
-func _on_projectile_hit(ctx: Dictionary) -> void:
-    # Guard: target may have died while the projectile was in flight.
-    # 가드: 투사체 비행 중 대상이 사망했을 수 있음.
-    var target: CombatUnit = ctx.get("target")
-    if not is_instance_valid(target) or not target.is_alive():
-        push_warning("[PROJ] Target invalid or dead on arrival — skipping")
-        return
+# CombatScene.gd — ProjectileManager.projectile_arrived 연결
+func _on_projectile_arrived(context: Dictionary) -> void:
+    var target: CombatUnit = context.get("target")
+    var attacker: CombatUnit = context.get("attacker")
+    var action_data: Dictionary = context.get("action_data", {})
+    var event_data: Dictionary = context.get("event_data", {})
 
-    # Restore _dispatch_* vars from context snapshot.
-    # 컨텍스트 스냅샷에서 _dispatch_* 변수 복원.
-    _dispatch_attacker        = ctx["attacker"]
-    _dispatch_target          = ctx["target"]
-    _dispatch_atk_ctx         = ctx["atk_ctx"]
-    _dispatch_did_hit         = ctx["did_hit"]
-    _dispatch_final_dmg       = ctx["final_dmg"]
-    _dispatch_did_crit        = ctx["did_crit"]
-    _dispatch_dmg_before_crit = ctx["dmg_before_crit"]
-    _dispatch_back_bonus      = ctx["back_bonus"]
-    _dispatch_hit_chance      = ctx["hit_chance"]
-    _dispatch_is_magic        = ctx["is_magic"]
+    if not is_instance_valid(target):
+        return  # 비행 중 대상 사망 시 무시
 
-    _handle_hit_frame()
-```
+    # 피해 적용
+    var damage := _calculate_damage(attacker, target, action_data)
+    target.receive_hit(damage, "ranged", attacker)
 
-### 5.4 Engagement Guard — Modified
-
-> 🇰🇷 **교전 생성 가드 수정** — 원거리 공격(거리 > 1)은 교전 생성 안 함
-
-**Location:** `CombatScene.gd` line ~700, inside `_resolve_attack()`.
-
-**Before:**
-```gdscript
-if target.engaged_with == null and attacker.engaged_with == null:
-    attacker.engaged_with = target
-    ...
-```
-
-**After:**
-```gdscript
-# Only melee attacks (grid distance == 1) create engagement.
-# 근접 공격(거리 1)만 교전 생성. 원거리는 교전 없음.
-if grid_manager.grid_distance(attacker.grid_pos, target.grid_pos) <= 1:
-    if target.engaged_with == null and attacker.engaged_with == null:
-        attacker.engaged_with = target
-        ...
+    # 카메라 효과는 ProjectileManager에서 이미 처리됨
 ```
 
 ---
 
-## 6. Range System
+## 6. 카메라 연출
 
-> 🇰🇷 **사거리 시스템**
+### 6-1. 원거리 공격 카메라 프리셋
 
-### 6.1 class_config.json — New Fields
+```jsonc
+// data/cameras/camera_config.json — 추가 프리셋
 
-> 🇰🇷 **`class_config.json` 수정** — `attack_range`와 `projectile` 필드 추가
-
-```json
-"Fighter": {
-  "attack_range": 1,
-  "actions": { "basic_attack": { "motion": "attack_melee" } }
-},
-"Archer": {
-  "attack_range": 4,
-  "actions": { "basic_attack": { "motion": "attack_ranged", "projectile": "arrow" } }
-},
-"Rogue": {
-  "attack_range": 1,
-  "actions": { "basic_attack": { "motion": "attack_melee" } }
-},
-"Mage": {
-  "attack_range": 3,
-  "actions": { "basic_attack": { "motion": "cast_spell" } }
-}
-```
-
-> 🇰🇷 `attack_range`: 공격 가능 최대 거리(셀 단위). `projectile` 필드 있으면 해당 JSON 사용.
-> Mage `basic_attack`에 `projectile` 없음 — `hit_frame` 즉발 유지.
-
-### 6.2 GridManager.gd — New Functions
-
-> 🇰🇷 **GridManager.gd 신규 함수 2개** — 거리 계산 및 범위 셀 조회
-
-The grid uses a **staggered column** layout (odd columns: +0.5 Z offset).
-Distance uses offset→cube conversion, then standard hex distance formula.
-
-> 🇰🇷 그리드는 **스태거드 열** 레이아웃 (홀수 열: Z방향 +0.5 오프셋).
-> 거리 계산: 오프셋 좌표 → 큐브 좌표 변환 후 hex 거리 공식 적용.
-
-```gdscript
-# Offset → cube coordinate conversion (staggered column grid).
-# 오프셋 → 큐브 좌표 변환 (스태거드 열 그리드 기준).
-func _offset_to_cube(pos: Vector2i) -> Vector3i:
-    var q: int = pos.x
-    var r: int = pos.y - (pos.x - (pos.x & 1)) / 2
-    return Vector3i(q, r, -q - r)
-
-
-# Returns the grid-cell distance between two positions.
-# 두 위치 사이의 그리드 셀 거리 반환.
-func grid_distance(a: Vector2i, b: Vector2i) -> int:
-    var ca: Vector3i = _offset_to_cube(a)
-    var cb: Vector3i = _offset_to_cube(b)
-    return maxi(
-        maxi(absi(ca.x - cb.x), absi(ca.y - cb.y)),
-        absi(ca.z - cb.z)
-    )
-
-
-# Returns all cells within range_cells distance of center (inclusive).
-# center에서 range_cells 이내의 모든 셀 반환 (경계 포함).
-func get_cells_in_range(center: Vector2i, range_cells: int) -> Array[Vector2i]:
-    var result: Array[Vector2i] = []
-    for x in range(center.x - range_cells, center.x + range_cells + 1):
-        for y in range(center.y - range_cells, center.y + range_cells + 1):
-            var c := Vector2i(x, y)
-            if is_in_bounds(c) and grid_distance(center, c) <= range_cells:
-                result.append(c)
-    return result
-```
-
-### 6.3 CombatUnit.gd — New Function
-
-> 🇰🇷 **CombatUnit.gd 신규 함수** — 공격 사거리 조회
-
-```gdscript
-# Returns attack range in grid cells from class_config.
-# class_config에서 공격 사거리(셀 단위) 반환. 기본값 1 (근접).
-func get_attack_range() -> int:
-    var class_cfg: Dictionary = ClassConfig.get_config(data.class_id)
-    return int(class_cfg.get("attack_range", 1))
-```
-
-### 6.4 _get_attack_targets() — Modified
-
-> 🇰🇷 **`_get_attack_targets()` 수정** — 사거리 기반 타겟 탐색 (CombatScene.gd 572번째 줄)
-
-**Before:**
-```gdscript
-for cell in grid_manager.get_attack_neighbors(unit.grid_pos):
-```
-
-**After:**
-```gdscript
-var attack_range: int = unit.get_attack_range()
-var cells: Array[Vector2i]
-if attack_range <= 1:
-    # Melee: neighbors only — keeps existing behavior.
-    # 근접: 이웃 셀만 — 기존 동작 유지.
-    cells = grid_manager.get_attack_neighbors(unit.grid_pos)
-else:
-    # Ranged: all cells within range.
-    # 원거리: 사거리 내 모든 셀.
-    cells = grid_manager.get_cells_in_range(unit.grid_pos, attack_range)
-for cell in cells:
-```
-
----
-
-## 7. Extended Projectile JSON Schema
-
-> 🇰🇷 **확장 투사체 JSON 스키마**
-
-Full schema — all supported fields:
-
-> 🇰🇷 지원하는 모든 필드를 포함한 전체 스키마.
-
-```json
 {
-  "type": "arrow",
-  "speed": 12.0,
-  "arc": false,
-  "arc_height": 0.0,
-  "fx_trail": "fx_arrow_trail",
-  "fx_hit": "fx_arrow_impact",
-  "sfx_launch": "sfx_arrow_shoot",
-  "sfx_hit": "sfx_arrow_hit",
-  "rotate_to_velocity": true
+    "presets": {
+        // ... 기존 프리셋 유지 ...
+
+        "soft_track_ranged": {
+            "type": "soft_track",
+            "weight": 0.08,
+            "duration": 0.6,
+            "ease": "ease_out"
+        },
+        "shake_ranged_hit": {
+            "type": "shake",
+            "intensity": 0.20,
+            "duration": 0.15,
+            "decay": "ease_out"
+        }
+    }
 }
 ```
 
-Fields to add to each existing file:
+### 6-2. 카메라 경로 연동
 
-> 🇰🇷 기존 JSON에 추가할 필드 목록:
-
-`arrow.json` — add: `"arc_height": 0.0`, `"sfx_launch": "sfx_arrow_shoot"`, `"rotate_to_velocity": true`
-
-`magic_bolt.json` — add: `"arc_height": 0.0`, `"sfx_launch": "sfx_magic_cast"`, `"rotate_to_velocity": false`
-
-`throw_stone.json` — add: `"sfx_launch": "sfx_stone_throw"`, `"rotate_to_velocity": false`
+| 시점 | 프리셋 | 경로 |
+|------|--------|------|
+| 원거리 공격 시작 | `soft_track_ranged` | 경로 B (animation_config 이벤트) |
+| 투사체 도착 hit | `shake_ranged_hit` | ProjectileManager → CameraDirector |
+| 즉발 마법 hit | `shake_light` | 경로 B (animation_config hit_frame) |
+| 치명타 (원거리) | combat_rules.json 조건 평가 | 경로 C |
 
 ---
 
-## 8. Context Isolation (Critical)
+## 7. animation_config.json 모션 추가/수정
 
-> 🇰🇷 **컨텍스트 격리 — 설계 핵심 주의사항**
+```jsonc
+// data/animations/animation_config.json — 수정/추가
 
-When multiple projectiles are in flight simultaneously, the CombatScene `_dispatch_*` vars will be overwritten by subsequent attacks before earlier projectiles arrive.
+{
+    "motions": {
+        // ... 기존 모션 유지 ...
 
-> 🇰🇷 동시에 여러 투사체가 날아가는 경우 `_dispatch_*` 변수가 덮어씌워짐.
-> 예: 궁수 공격 → 적 궁수 반격 → 두 번째 공격이 변수 덮어쓰기.
+        "attack_ranged": {
+            "loop": false,
+            "speed_scale": 1.0,
+            "events": [
+                {
+                    "ratio": 0.30,
+                    "type": "camera_effect",
+                    "data": { "preset": "soft_track_ranged" }
+                },
+                {
+                    "ratio": 0.55,
+                    "type": "spawn_projectile",
+                    "data": {
+                        "type": "arrow",
+                        "bone": "RightHand",
+                        "speed_override": 0.0
+                    }
+                },
+                {
+                    "ratio": 0.55,
+                    "type": "play_sfx",
+                    "data": { "sfx": "arrow_shoot" }
+                }
+            ]
+        },
 
-**Solution:** Each projectile owns `_context: Dictionary` — a **value copy** (`.duplicate()` for nested dicts) made at spawn time. `_on_projectile_hit()` restores from the snapshot, not from live `_dispatch_*` vars.
+        "cast_spell": {
+            "loop": false,
+            "speed_scale": 1.0,
+            "events": [
+                {
+                    "ratio": 0.20,
+                    "type": "attach_fx",
+                    "data": { "fx": "magic_charge", "bone": "RightHand" }
+                },
+                {
+                    "ratio": 0.65,
+                    "type": "camera_effect",
+                    "data": { "preset": "soft_track_ranged" }
+                },
+                {
+                    "ratio": 0.70,
+                    "type": "spawn_projectile",
+                    "data": {
+                        "type": "magic_bolt",
+                        "bone": "RightHand",
+                        "speed_override": 0.0
+                    }
+                },
+                {
+                    "ratio": 0.70,
+                    "type": "detach_fx",
+                    "data": { "fx": "magic_charge" }
+                },
+                {
+                    "ratio": 0.70,
+                    "type": "play_sfx",
+                    "data": { "sfx": "spell_cast" }
+                }
+            ]
+        },
 
-> 🇰🇷 **해법:** 각 투사체는 스폰 시점에 `.duplicate()`로 만든 값 복사본을 보유.
-> `_on_projectile_hit()`은 현재 `_dispatch_*`가 아닌 복사본에서 복원.
+        "cast_instant": {
+            "loop": false,
+            "speed_scale": 1.0,
+            "events": [
+                {
+                    "ratio": 0.20,
+                    "type": "attach_fx",
+                    "data": { "fx": "magic_charge", "bone": "RightHand" }
+                },
+                {
+                    "ratio": 0.80,
+                    "type": "hit_frame",
+                    "data": { "damage_multiplier": 1.0 }
+                },
+                {
+                    "ratio": 0.80,
+                    "type": "detach_fx",
+                    "data": { "fx": "magic_charge" }
+                },
+                {
+                    "ratio": 0.80,
+                    "type": "camera_effect",
+                    "data": { "preset": "shake_light" }
+                },
+                {
+                    "ratio": 0.80,
+                    "type": "play_sfx",
+                    "data": { "sfx": "spell_cast" }
+                }
+            ]
+        }
+    }
+}
+```
 
-Required guard every time:
+> [NOTE] `cast_spell`은 projectile delivery용 (spawn_projectile 이벤트 포함).
+> `cast_instant`은 instant delivery용 (hit_frame 이벤트로 즉시 피해).
+> 스킬별로 `motion_name`을 다르게 지정하여 분기.
 
-> 🇰🇷 **필수 가드** — 항상 확인:
+---
+
+## 8. UnitRenderer3D 확장
+
+### 8-1. 본 위치 조회
+
+투사체 발사 위치를 본 기준으로 가져오기 위한 함수.
 
 ```gdscript
-# Target may have died to another projectile's earlier hit.
-# 다른 투사체에 먼저 맞아 사망했을 수 있음.
-if not is_instance_valid(target) or not target.is_alive():
-    return
+# scripts/rendering/UnitRenderer3D.gd — 추가 함수
+
+func get_bone_position(bone_name: String) -> Vector3:
+    if _skeleton == null:
+        return global_position + Vector3(0, 1.0, 0)
+
+    var bone_idx := _skeleton.find_bone(bone_name)
+    if bone_idx == -1:
+        # 폴백: 모델 상단 추정
+        return global_position + Vector3(0, 1.2, 0)
+
+    var bone_global := _skeleton.global_transform * _skeleton.get_bone_global_pose(bone_idx)
+    return bone_global.origin
 ```
 
 ---
 
-## 9. Implementation Priority
+## 9. 공격 타일 하이라이트 비주얼
 
-> 🇰🇷 **구현 우선순위**
+### 9-1. 원거리 공격 범위 표시
 
-### B-1 Core — Archer functional
+원거리 유닛 선택 시:
+- **파란색 영역**: 이동 가능 타일 (기존)
+- **빨간색 타일**: 공격 가능 적 (사거리 내 + LOS 통과)
+- **회색 타일** (선택적): 사거리 내지만 LOS 실패인 적
 
-> 🇰🇷 **B-1 코어** — 궁수가 동작하는 최소 구현
+### 9-2. 사각지대 표시
 
-1. `ProjectileConfig.gd` — singleton, JSON loading
-2. `Projectile.gd` — straight-line flight, `hit_arrived`, placeholder mesh
-3. `ProjectileManager.gd` — `spawn()`, `clear_all()`, added to `combat_scene.tscn`
-4. `animation_config.json` — `attack_ranged` events updated
-5. `class_config.json` — `attack_range` + `projectile` fields
-6. `CombatScene.gd` — `_handle_spawn_projectile()` full impl + `_on_projectile_hit()`
-7. `CombatUnit.gd` — `get_attack_range()`
-8. `GridManager.gd` — `grid_distance()` + `get_cells_in_range()`
-9. `CombatScene.gd` — `_get_attack_targets()` range support + engagement guard
-
-### B-2 Range Polish
-
-> 🇰🇷 **B-2 사거리 다듬기**
-
-- Enemy AI: add ranged target selection (currently uses `get_attack_neighbors`)
-- Out-of-range indicator (dim tiles beyond `attack_range`)
-
-### B-3 Flight Polish
-
-> 🇰🇷 **B-3 비행 연출 다듬기**
-
-- Arc flight for `throw_stone` (`arc: true` already in JSON)
-- `rotate_to_velocity` for arrow (mesh faces direction of travel)
-
-### B-4 VFX (Phase 4+)
-
-> 🇰🇷 **B-4 시각 효과** (Phase 4 이후)
-
-- Trail particles (`fx_trail`), impact VFX (`fx_hit`), audio (`sfx_launch`, `sfx_hit`)
-- Camera shake on projectile impact
+min_range 내 적은 하이라이트하지 않는다.
+UI 팁 메시지: "사정거리 밖 — 이동이 필요합니다" (후순위).
 
 ---
 
-## 10. Deferred / Extended Scope
+## 10. 구현 순서 (Phase B 세부)
 
-> 🇰🇷 **연기된/확장 범위 항목** — 이전 설계 문서에서 고려한 기능, 현재 범위 외
+| 단계 | 항목 | 의존성 | 예상 규모 |
+|------|------|--------|----------|
+| B-1 | `hex_distance()`, `offset_to_cube()`, `cube_to_offset()` | 없음 | Small |
+| B-2 | `get_cells_in_attack_range()` + 클래스 JSON `attack_range` 필드 | B-1 | Small |
+| B-3 | `has_line_of_sight()` + `_cube_round()` | B-1 | Medium |
+| B-4 | `ProjectileConfig` 싱글톤 + `data/projectiles/` JSON 3종 | 없음 | Small |
+| B-5 | `Projectile` 씬/스크립트 (비행 + 프리미티브 비주얼) | B-4 | Medium |
+| B-6 | `ProjectileManager` (spawn + arrived 시그널) | B-5 | Medium |
+| B-7 | `CombatScene` — `_handle_spawn_projectile()` + 비동기 idle 복귀 | B-6 | Medium |
+| B-8 | `CombatScene` — delivery 분기 (`melee`/`projectile`/`instant`) | B-7 | Medium |
+| B-9 | `CombatScene` — 원거리 공격 하이라이트 (사거리 + LOS + min_range) | B-2, B-3 | Small |
+| B-10 | `animation_config.json` — `attack_ranged`, `cast_spell`, `cast_instant` | B-7, B-8 | Small |
+| B-11 | 카메라 프리셋 추가 (`soft_track_ranged`, `shake_ranged_hit`) | B-7 | Small |
+| B-12 | `UnitRenderer3D.get_bone_position()` | 없음 | Small |
+| B-13 | 통합 테스트 — Archer/Mage 전투 시나리오 | 전체 | — |
 
-The following features were considered in prior design discussions but are intentionally deferred:
+### 병렬 가능 그룹
 
-> 🇰🇷 아래 기능들은 이전 설계 논의에서 검토됐으나 현재 Phase B 범위에서 의도적으로 제외.
-
-| Feature | Reason Deferred |
-|---------|----------------|
-| Archer `min_range` blind spot (range_min=2) | Adds UI complexity; revisit with passive skill system |
-| LOS (Line of Sight) blocking by terrain | Requires full 3D terrain height data; Phase C+ |
-| Mage `basic_attack` projectile (magic_bolt) | `cast_spell` stays instant; projectile Mage is skill-tier |
-| Delivery system (`melee`/`projectile`/`instant` split) | Over-engineered for B-1; delivery is implied by motion |
-| `visual` mesh config in projectile JSON | Placeholder mesh code handles it; data-driven later |
-
-> 🇰🇷 위 항목들은 B-1~B-3 구현 완료 후 별도 설계 문서로 다룰 예정.
-
----
-
-## 11. Verification Scenarios
-
-> 🇰🇷 **검증 시나리오**
-
-| # | Scenario | Expected Result |
-|---|----------|-----------------|
-| V-1 | Archer attacks enemy at distance ≥ 2 | Arrow flies; damage on arrival; no engagement |
-| V-2 | Archer attacks adjacent enemy (distance 1) | Arrow flies; damage on arrival; engagement created |
-| V-3 | Engaged Archer attacks | Forced to attack engagement partner (line 573); arrow still fires |
-| V-4 | Throw stone (arc: true) | Parabolic arc to target; impact on arrival |
-| V-5 | Target dies before arrow arrives | `is_instance_valid` guard triggers; hit skipped gracefully |
-| V-6 | Two arrows in flight simultaneously | Independent contexts; no corruption |
-| V-7 | Mage `basic_attack` | No projectile; `hit_frame` instant damage; unchanged |
-| V-8 | Combat ends mid-flight | `ProjectileManager.clear_all()` frees all nodes safely |
+```
+그룹 A (사거리):  B-1 → B-2 → B-3 → B-9
+그룹 B (투사체):  B-4 → B-5 → B-6 → B-7 → B-8
+그룹 C (데이터):  B-10 + B-11 + B-12 (독립)
+        ↓
+    B-13 (통합 테스트)
+```
 
 ---
 
-## 12. File Change Summary
+## 11. 수정/생성 파일 목록
 
-> 🇰🇷 **파일 변경 요약**
+### 신규 생성
 
-| File | Action | Key Change |
-|------|--------|------------|
-| `scripts/combat/Projectile.gd` | **NEW** | Full class |
-| `scripts/combat/ProjectileManager.gd` | **NEW** | Full class |
-| `scripts/singletons/ProjectileConfig.gd` | **NEW** | Full class; register in `project.godot` |
-| `scripts/combat/CombatScene.gd` | MODIFY | Lines 572, ~700, 812 + new `_on_projectile_hit()` |
-| `scripts/combat/CombatUnit.gd` | MODIFY | Add `get_attack_range()` |
-| `scripts/combat/GridManager.gd` | MODIFY | Add `_offset_to_cube()`, `grid_distance()`, `get_cells_in_range()` |
-| `data/animations/animation_config.json` | MODIFY | `attack_ranged`: remove `hit_frame@0.55`, add `spawn_projectile@0.40` |
-| `data/classes/class_config.json` | MODIFY | Add `attack_range` + `projectile` per class |
-| `data/projectiles/arrow.json` | MODIFY | Add `arc_height`, `sfx_launch`, `rotate_to_velocity` |
-| `data/projectiles/magic_bolt.json` | MODIFY | Add `arc_height`, `sfx_launch`, `rotate_to_velocity` |
-| `data/projectiles/throw_stone.json` | MODIFY | Add `sfx_launch`, `rotate_to_velocity` |
+| 파일 | 역할 |
+|------|------|
+| `scripts/singletons/ProjectileConfig.gd` | 투사체 JSON 로더 (싱글톤) |
+| `scripts/combat/ProjectileManager.gd` | 투사체 생성/관리 |
+| `scripts/combat/Projectile.gd` | 개별 투사체 비행 로직 |
+| `scenes/combat/projectile.tscn` | 투사체 씬 |
+
+### 수정
+
+| 파일 | 변경 내용 |
+|------|----------|
+| `scripts/combat/GridManager.gd` | `hex_distance()`, `offset_to_cube()`, `cube_to_offset()`, `_cube_round()`, `get_cells_in_attack_range()`, `has_line_of_sight()` |
+| `scripts/combat/CombatScene.gd` | delivery 분기, `_handle_spawn_projectile()`, `_on_projectile_arrived()`, 원거리 하이라이트, ProjectileManager 연결 |
+| `scripts/rendering/UnitRenderer3D.gd` | `get_bone_position()` |
+| `data/classes/archer.json` | `attack_type`, `attack_range_max/min`, `actions.delivery` |
+| `data/classes/mage.json` | `attack_type`, `attack_range_max/min`, `actions.delivery` |
+| `data/classes/fighter.json` | `attack_type`, `attack_range_max/min` (명시화) |
+| `data/classes/rogue.json` | `attack_type`, `attack_range_max/min` (명시화) |
+| `data/projectiles/arrow.json` | 기존 구조 확장 (visual, sfx_launch, camera_on_hit) |
+| `data/projectiles/magic_bolt.json` | 기존 구조 확장 |
+| `data/projectiles/throw_stone.json` | 기존 구조 확장 |
+| `data/animations/animation_config.json` | `attack_ranged`, `cast_spell`, `cast_instant` 모션 |
+| `data/cameras/camera_config.json` | `soft_track_ranged`, `shake_ranged_hit` 프리셋 |
+| `project.godot` | `ProjectileConfig` 오토로드 등록 |
 
 ---
 
-*@Planner — 2026-03-13*
+## 12. 미결정 / 후순위 항목
+
+| # | 항목 | 상태 | 비고 |
+|---|------|------|------|
+| 1 | Archer dodge 에셋 | 미수급 | 에셋 수급 후 별도 작업 |
+| 2 | 원거리 치명타 연출 | 후순위 | combat_rules.json 조건 추가 필요 |
+| 3 | AoE 마법 (범위 공격) | 후순위 | 타겟 선택 UI 필요, 별도 설계 문서 |
+| 4 | 투사체 GLB 에셋 교체 | 후순위 | `visual.mesh_type: "custom"` + `visual.mesh_path` 필드 예약 |
+| 5 | LOS 디버그 시각화 | 후순위 | 회색 점선 표시 |
+| 6 | Archer 근접 대체 공격 | 후순위 | 패시브 스킬 시스템 연동 |
+| 7 | 높이 차이 LOS 보정 | 후순위 | 3D 지형 구현 시 |
+| 8 | 투사체 FX Trail 실구현 | 후순위 | GPUParticles3D 연동 |
+
+---
+
+## 13. 설계 검증 체크리스트
+
+- [x] 모든 수치 JSON 외부화 — 코드 내 매직넘버 없음
+- [x] 기존 melee 흐름 변경 없음 — delivery="melee"는 기존과 동일
+- [x] 비동기 원칙 준수 — 투사체 발사 후 공격자 즉시 idle
+- [x] 카메라 경로 B/C 유지 — 신규 프리셋 추가만
+- [x] AnimEventDispatcher 변경 없음 — spawn_projectile 이벤트는 이미 정의됨
+- [x] GridManager 기존 인터페이스 유지 — get_attack_neighbors()는 래퍼로 존속
+- [x] GDScript 컨벤션 — int_stat, snake_case, UPPER_SNAKE_CASE 준수
+- [x] 단일 진입점 원칙 — CameraDirector.execute() 경유만 사용

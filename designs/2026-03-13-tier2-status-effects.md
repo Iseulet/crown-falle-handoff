@@ -1,10 +1,12 @@
 # CrownFalle — Tier 2 상태이상 시스템 설계서 (T2-1)
 
-> 작성일: 2026-03-13
+> 작성일: 2026-03-13 (2026-03-14 보강)
 > Agent: @Planner
 > Status: **확정** — 구현 착수 가능
 > 의존성: T1-2 (ARM/RES 게이지), T1-3 (전투 공식)
-> 참조: `2026-03-13-combat-system-proposal-final.md` §8
+> 참조: `2026-03-13-combat-system-proposal-final.md` §8, `2026-03-14-status-data-consolidation.md`
+>
+> ⚠️ `data/skills/status_effects.json` 폐기 예정 — 통합 설계서 참조: `2026-03-14-status-data-consolidation.md`
 
 ---
 
@@ -44,6 +46,10 @@ ARM/RES 게이지가 0이 될 때 CC가 활성화되는 구조로 "점사 전략
 | `shocked` | 감전 | 전기 | MV -1 | 2턴 |
 | `wet` | 젖음 | 물 | 화염 반감, 전기 증폭, 냉기→빙결 전환 | 2턴 |
 | `chilled` | 냉기 | 냉기 | MV -1, 재적용 시 빙결 전환 | 2턴 |
+| `crippled` | 절름발이 | 물리 | MV -2 | 2턴 |
+| `weakened` | 약화 | 마법 | 데미지 -25% | 2턴 |
+
+> 총 13개 효과 (CC 5 + DoT 3 + 디버프 5). 통합 스키마는 `2026-03-14-status-data-consolidation.md` §2 참조.
 
 ---
 
@@ -73,7 +79,8 @@ func get_statuses(unit: CombatUnit) -> Array  # [{effect_id, turns_remaining}]
 func process_tick(unit: CombatUnit) -> Array
 
 func is_skip_turn(unit: CombatUnit) -> bool      # stun/knockdown/frozen/charm/fear
-func get_mv_penalty(unit: CombatUnit) -> int      # shocked/chilled MV 페널티 합산
+func is_action_disabled(unit: CombatUnit, action: String) -> bool  # disable_actions 기반 행동 차단 판정
+func get_mv_penalty(unit: CombatUnit) -> int      # shocked/chilled/crippled MV 페널티 합산
 func clear_all() -> void
 ```
 
@@ -88,42 +95,65 @@ var _unit_statuses: Dictionary  # CombatUnit → Array[{effect_id, turns_remaini
 
 ## 4. status_effects.json 구조
 
+> 통합 스키마 (`2026-03-14-status-data-consolidation.md` §2 참조). 아래는 대표 예시.
+
 ```json
 {
   "stun": {
+    "name": "기절",
     "type": "cc",
+    "category": "physical",
     "gate": "arm",
-    "duration": 1,
-    "effect": "skip_turn"
-  },
-  "knockdown": {
-    "type": "cc",
-    "gate": "arm",
-    "duration": 1,
-    "effect": "skip_turn"
-  },
-  "frozen": {
-    "type": "cc",
-    "gate": "res",
     "duration": 1,
     "effect": "skip_turn",
-    "physical_bonus_dmg_pct": 30
+    "disable_actions": ["move", "attack", "skill"],
+    "stacks": false,
+    "refresh_on_reapply": false,
+    "visual": "fx_stun_sparks",
+    "motion_override": "stun_loop"
   },
   "poisoned": {
+    "name": "중독",
     "type": "dot",
+    "category": "physical",
     "element": "poison",
     "gate": null,
     "duration": 3,
-    "dot_dmg": 3
+    "dot_dmg": 3,
+    "dot_damage_stat": null,
+    "dot_damage_coefficient": null,
+    "stacks": false,
+    "refresh_on_reapply": true,
+    "visual": "fx_bleed_drip",
+    "motion_override": null
+  },
+  "crippled": {
+    "name": "절름발이",
+    "type": "debuff",
+    "category": "physical",
+    "element": "physical",
+    "gate": null,
+    "duration": 2,
+    "mv_penalty": 2,
+    "stacks": false,
+    "refresh_on_reapply": true,
+    "visual": "fx_cripple_chains",
+    "motion_override": null
   }
 }
 ```
 
 **핵심 필드:**
+- `"name"`: 한국어 표시명
+- `"category"`: `"physical"` / `"magical"` — CC 게이팅 분류
 - `"gate"`: `"arm"` / `"res"` / `null` — CC 발동 조건
 - `"effect"`: `"skip_turn"` / `"attack_ally"` / `"random_move"` — CC 행동 치환
-- `"dot_dmg"`: DoT 1턴당 HP 직접 차감량
+- `"disable_actions"`: `["move", "attack", "skill"]` 부분집합 — 행동 차단 명세
+- `"dot_dmg"`: DoT 1턴당 HP 직접 차감량 (고정값)
+- `"dot_damage_stat"` / `"dot_damage_coefficient"`: 스탯연동 DoT (Tier 3 예비, nullable)
 - `"mv_penalty"`: 이동력 감소량
+- `"stacks"` / `"refresh_on_reapply"`: 중첩/재적용 규칙
+- `"visual"` / `"motion_override"`: 연출 정보
 
 ---
 

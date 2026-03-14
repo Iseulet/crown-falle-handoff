@@ -165,10 +165,12 @@ RES  = WIL × res_per_wil                    (게이지) [2026-03-13 변경]
 
   // [2026-03-13 변경] ARM/RES 게이지 계수 — %형 폐기, 게이지형으로 전환
   "armor": {
-    // ARM 게이지 = CON × arm_per_con | 적용: 유닛 초기화 / 물리 피격 시 차감
-    "arm_per_con": 3,
-    // RES 게이지 = WIL × res_per_wil | 적용: 유닛 초기화 / 마법 피격 시 차감
-    "res_per_wil": 3
+    // ARM 게이지 = arm_base + CON × arm_per_con | 적용: 유닛 초기화 / 물리 피격 시 차감
+    "arm_base": 0,        // ⚠️ PENDING: 장비 시스템 도입 시 직업별 차등 적용 예정
+    "arm_per_con": 3,     // ⚠️ PENDING: 밸런스 테스트 후 조정
+    // RES 게이지 = res_base + WIL × res_per_wil | 적용: 유닛 초기화 / 마법 피격 시 차감
+    "res_base": 0,        // ⚠️ PENDING: 장비 시스템 도입 시 직업별 차등 적용 예정
+    "res_per_wil": 3      // ⚠️ PENDING: 밸런스 테스트 후 조정
   },
 
   // 적중률 계수 — 물리 공격 명중 판정 시 적용 (마법 공격은 항상 명중)
@@ -223,6 +225,10 @@ RES  = WIL × res_per_wil                    (게이지) [2026-03-13 변경]
 | 3 | MP 회복 방식 | A) 턴마다 자동회복  B) 전투 후 전량 회복  C) 아이템/스킬만 | 미정 |
 | 4 | crit_damage_bonus | 수치 조정 필요 | 50% |
 | 5 | dex_mv_coefficient | DEX 5당 1칸 증가(0.2) 적절한지 | 0.2 |
+| 6 | arm_per_con | 1, 2, 3 | 3 |
+| 7 | res_per_wil | 1, 2, 3 | 3 |
+| 8 | arm_base / res_base | 0 또는 직업별 차등 | 0 |
+| 9 | ARM/RES 게이지 전투 중 회복 여부 | A) 회복 없음 B) 턴당 소량 C) 스킬만 | A |
 
 ---
 
@@ -234,7 +240,11 @@ MercenaryData.gd:
   미저장: hp, mp, hit, mv, crit, arm, res  (런타임 계산)
 
 CombatUnit.gd:
-  get_hp(), get_mp(), get_hit(), get_mv(), get_crit(), get_arm(), get_res()
+  get_hp(), get_mp(), get_hit(), get_mv(), get_crit()
+  get_max_arm() → arm_base + CON × arm_per_con  [✅ 구현됨]
+  get_max_res() → res_base + WIL × res_per_wil  [✅ 구현됨]
+  is_parm_depleted() → current_arm == 0  [✅ 구현됨]
+  is_marm_depleted() → current_res == 0  [✅ 구현됨]
   → combat_config.jsonc 계수 기반 계산 함수 추가 필요
 
 DataLoader.gd:

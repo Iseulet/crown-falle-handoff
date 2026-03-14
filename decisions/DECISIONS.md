@@ -306,4 +306,20 @@ Dev 폴더 전체가 Google Drive로 동기화되므로, 바이너리 에셋은 
 - **근거:** 전투 재미가 검증된 뒤 리스크 레이어 추가. 워테일즈 방식 채택.
 - **참조:** `handoff/plans/design/2026-03-13-combat-system-proposal-final.md` §9
 
+## [2026-03-14] 상태이상 데이터 단일 파일 통합
+> 🇰🇷 [2026-03-14] 상태이상 데이터 파일 통합
+> **Category:** data | **Status:** ✅ 확정 | **Superseded By:** —
+
+- **통합 대상:** `data/effects/status_effects.json` (존속) + `data/skills/status_effects.json` (폐기)
+  > 🇰🇷 effects 파일 유지, skills 파일 폐기
+- **ID 포맷:** 소문자 (stun, bleeding, burning) — 런타임 표준 유지
+  > 🇰🇷 런타임 코드 전체가 소문자 사용 중이므로 소문자 통일
+- **통합 후 13개 효과:** 기존 11 + crippled, weakened 추가
+  > 🇰🇷 CC 5종, DoT 3종, 디버프 5종
+- **근거:** 중복 데이터 제거, ID 불일치 해소, `is_action_disabled()` 성능 수정
+  > 🇰🇷 매 호출 JSON 로드 제거, disable_actions 필드 기반 캐싱
+- **설계 문서:** `handoff/plans/design/2026-03-14-status-data-consolidation.md`
+
+---
+
 <!-- Add new decisions below this line -->

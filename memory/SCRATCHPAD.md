@@ -26,9 +26,9 @@
 - CURRENT.md writes: always verify after writing. If interrupted mid-write,
   next session must reconcile from `handoff/LOG/YYYY-MM-DD.md` as source of truth.
   > 🇰🇷 CURRENT.md 쓰기 후 반드시 검증. 중단 시 LOG가 진실의 원천.
-- After ANY file modification (even 1-line fix): run the 5-step completion checklist.
+- After ANY file modification (even 1-line fix): run the 5-step completion checklist + 6. TODO.md 갱신.
   If unsure whether it's a task or conversation: it's a task. Log it.
-  > 🇰🇷 파일 수정 후 (1줄이라도) 반드시 5단계 체크리스트 실행. 애매하면 작업으로 간주.
+  > 🇰🇷 파일 수정 후 (1줄이라도) 반드시 5+1단계 체크리스트 실행. 6. TODO.md 갱신 확인. 애매하면 작업으로 간주.
 - Large implementations (3+ files): always propose checkpoint before starting.
   Never modify 3+ files without a safety net (git stash or WIP commit).
   > 🇰🇷 대규모 구현 (3+ 파일): 시작 전 항상 체크포인트 제안. 안전망 없이 진행 금지.

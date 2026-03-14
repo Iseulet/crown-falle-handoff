@@ -42,6 +42,7 @@ All confirmed decisions documented in `handoff/DECISIONS.md` [2026-03-08].
 | Camera presets | `data/cameras/camera_config.json` | Camera effect presets |
 | Combat camera | `data/cameras/combat_rules.json` | Combat camera rules |
 | Projectiles | `data/projectiles/{type}.json` | arrow, magic_bolt, throw_stone |
+| Status effects (패시브용) | `data/skills/status_effects.json` | 패시브 트리거 상태이상 7종 (BLEED/KNOCKDOWN/CRIPPLED/BURNING/STUNNED/WEAKENED/FRIGHTENED) |
 
 ---
 

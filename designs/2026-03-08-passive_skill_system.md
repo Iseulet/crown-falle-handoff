@@ -70,10 +70,23 @@ condition: null (on_engage 트리거)           → 교전 중인 채로 턴 시
 | 필드 | 타입 | 설명 |
 |------|------|------|
 | `target` | string | `self` / `enemy` / `ally` |
-| `stat` | string | 영향받는 스탯 키 |
-| `value` | number | 적용 수치 |
+| `stat` | string | 영향받는 스탯 키. `"apply_status"` 사용 시 상태이상 적용 |
+| `value` | number | 적용 수치 (`apply_status` 타입에서는 미사용) |
 | `duration` | null / `"turn"` / N | null=영구, "turn"=해당 턴 한정, N=N턴 지속 |
 | `chance` | null / N | null=100% 발동, N=N% 확률 발동 |
+| `status_id` | string | `stat == "apply_status"` 일 때 적용할 상태이상 ID (`status_effects.json` 참조) |
+| `duration_override` | null / N | null이면 `default_duration` 사용, 숫자면 덮어쓰기 |
+
+**`apply_status` effect 타입 예시:**
+```jsonc
+{
+    "target": "enemy",
+    "stat": "apply_status",
+    "status_id": "BLEED",
+    "duration_override": null,
+    "chance": 50
+}
+```
 
 ### passive_skills.json — 통합 스킬 테이블
 
@@ -202,6 +215,8 @@ condition: null (on_engage 트리거)           → 교전 중인 채로 턴 시
 | `self_hp_below_percent: N` | 자신 HP N% 이하 |
 | `self_hp_above_percent: N` | 자신 HP N% 이상 |
 | `engage_just_started: true` | 교전 새로 성립 시 (1회) |
+| `target_parm_depleted: true` | 대상의 ARM 게이지 == 0 (물리 CC 게이팅용) [2026-03-13 추가] |
+| `target_marm_depleted: true` | 대상의 RES 게이지 == 0 (마법 CC 게이팅용) [2026-03-13 추가] |
 
 ---
 
@@ -241,7 +256,7 @@ condition: null (on_engage 트리거)           → 교전 중인 채로 턴 시
 ## 7. Implementation Notes
 
 ```
-PassiveManager.gd (신규):
+PassiveManager.gd [✅ 구현됨]:
   전투 시작 시:
     유닛 class_id → class_config에서 passives[] 로드
     passive_skills.json에서 id로 스킬 데이터 조회
@@ -262,6 +277,7 @@ PassiveManager.gd (신규):
   effects[] 처리:
     for effect in passive["effects"]:
       chance 체크 → null이면 100%, N이면 N% 확률
+      stat == "apply_status" → _status_manager.apply_status() 위임  [✅ 구현됨]
       stat 적용
       duration 등록 (null=영구, "turn"=턴 종료 시 제거, N=N턴 후 제거)
 
@@ -269,11 +285,86 @@ PassiveManager.gd (신규):
     턴 종료 시 duration="turn" 효과 일괄 제거
     N턴 효과는 turn_counter 감소, 0이 되면 제거
 
+  setup_status_manager(sm: StatusManager):  [✅ 구현됨]
+    apply_status 효과 위임용 StatusManager 참조 등록
+
+StatusManager.gd [✅ 기존 구현 + 확장]:
+  (기존 T2 DoT/CC 관리 + 신규 메서드)
+  is_action_disabled(unit, action_type) → bool  [✅ 구현됨]
+    action_type: "move", "attack", "skill"
+    KNOCKDOWN/STUNNED/FRIGHTENED 등 disable_actions 조회
+
 CombatScene.gd:
   각 이벤트 발생 지점에 PassiveManager 훅 호출 추가
   턴 종료 시 duration 만료 효과 일괄 정리
+  _passive_manager.setup_status_manager(_status_manager) 호출  [✅ 구현됨]
 
 확장성:
   직업 외 스킬 습득 시 unit.extra_passives[]에 id append
   PassiveManager는 active_passives + extra_passives 합산 처리
+```
+
+---
+
+## 8. 상태이상 (Status Effects)
+> [2026-03-13 추가] DOS2 영감 — ARM/RES 게이지 소진 후 CC 적용
+
+### 8-1. 상태이상 분류
+
+| 카테고리 | damage_type | CC 게이팅 조건 | 상태이상 |
+|----------|-------------|--------------|---------|
+| 물리 | physical | `target_parm_depleted: true` | BLEED, KNOCKDOWN, CRIPPLED |
+| 마법 | magical | `target_marm_depleted: true` | BURNING, STUNNED, WEAKENED, FRIGHTENED |
+
+### 8-2. 개별 상태이상 정의
+
+데이터 파일: `data/skills/status_effects.json` [✅ 생성됨]
+
+### 8-3. 상태이상 요약 테이블
+
+| ID | 이름 | 분류 | 타입 | 효과 | 지속 | 행동차단 |
+|----|------|------|------|------|------|---------|
+| BLEED | 출혈 | 물리 | DoT | 매 턴 물리 데미지 (STR×0.3) | 2턴 | 없음 |
+| KNOCKDOWN | 넉다운 | 물리 | Disable | 전체 행동 불가 | 1턴 | **전체** |
+| CRIPPLED | 절름발이 | 물리 | Debuff | MV -2 | 2턴 | 없음 |
+| BURNING | 화상 | 마법 | DoT | 매 턴 마법 데미지 (INT×0.3) | 2턴 | 없음 |
+| STUNNED | 기절 | 마법 | Disable | 전체 행동 불가 | 1턴 | **전체** |
+| WEAKENED | 약화 | 마법 | Debuff | 데미지 -25% | 2턴 | 없음 |
+| FRIGHTENED | 공포 | 마법 | Disable | 스킬 사용 불가 | 2턴 | **스킬만** |
+
+### 8-4. 상태이상 처리 규칙
+
+```
+적용 시:
+  1. CC 게이팅 조건 확인 (condition 평가)
+  2. 이미 같은 상태이상이 있고 stacks == false이면:
+     - refresh_on_reapply == true: duration 리셋
+     - refresh_on_reapply == false: 적용 실패 (중복 방지)
+  3. motion_override가 있으면 idle 대체 루프 모션 재생
+
+턴 시작 시:
+  1. DoT 효과 발동 (dot_damage 계산 → receive_hit)
+  2. duration -= 1
+  3. duration == 0이면 상태이상 해제
+
+해제 시:
+  - debuff_stat 복원
+  - motion_override 해제 → idle 복귀
+  - visual FX 제거
+```
+
+### 8-5. DoT 데미지 계산
+
+```
+BLEED:
+  dot_damage = 시전자.STR × dot_damage_coefficient (0.3)
+  damage_type = "physical"
+  → ARM 게이지 흡수 → 잔여 HP 적용 (stat_system.md 4-4 규칙)
+
+BURNING:
+  dot_damage = 시전자.INT × dot_damage_coefficient (0.3)
+  damage_type = "magical"
+  → RES 게이지 흡수 → 잔여 HP 적용
+
+※ 시전자 사망 시: DoT는 적용 시점의 스탯 스냅샷 사용 (시전자 참조 끊김)
 ```
