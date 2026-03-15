@@ -1,5 +1,5 @@
 # CrownFalle Proto — 프로젝트 레퍼런스
-> 생성일: 2026-03-13 | 갱신 주기: 아키텍처 변경 시만
+> 생성일: 2026-03-13 | 갱신: 2026-03-15 (스탯 구조 개편 반영)
 
 ---
 
@@ -27,10 +27,12 @@ STR / DEX / CON / INT / WIL
 | MP | WIL × 3 |
 | STA | 10 + CON × 2 |
 | HIT | 70 + DEX × 0.5 |
-| MV | 직업기본 + DEX × 0.2 |
+| MV | class_config.move_range (고정, DEX 무관) |
 | CRIT | DEX × 0.5 + 직업보정 |
-| ARM | CON × 0.3% |
-| RES | WIL × 0.3% |
+| ARM | class_config.default_arm (고정, CON 무관) |
+| RES | class_config.default_res (고정, WIL 무관) |
+
+> 🇰🇷 MV/ARM/RES는 2026-03-15 개편으로 1차 스탯 파생에서 분리됨. 직업별 고정값은 class_config.json 참조.
 
 ---
 
