@@ -21,6 +21,13 @@
 - `project.godot`: do NOT modify without explicit user approval
   > 🇰🇷 `project.godot` 수정 금지 — 명시적 승인 필요
 
+### Bug Fix Protocol
+
+- When user reports a bug/issue: FIRST check related design docs in `handoff/plans/design/`
+  to understand the intended behavior, THEN implement the fix aligned with the spec.
+  > 🇰🇷 버그/문제 제기 시: 먼저 관련 기획서(`handoff/plans/design/`)에서 의도된 동작을 파악한 후,
+  > 기획서에 맞게 수정한다.
+
 ### Operational [V1, V2, V5]
 
 - CURRENT.md writes: always verify after writing. If interrupted mid-write,

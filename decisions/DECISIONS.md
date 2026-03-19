@@ -17,7 +17,7 @@
 
 ## [2026-03-03] Engine & Language
 > 🇰🇷 [2026-03-03] 엔진 및 언어
-> **Category:** engine | **Status:** ✅ 확정 | **Superseded By:** —
+> **Category:** engine | **Status:** 🔄 수정됨 | **Superseded By:** [2026-03-19] Engine Transition
 
 - **Engine:** Godot 4.6.1
   > 🇰🇷 **엔진:** Godot 4.6.1
@@ -142,7 +142,7 @@ Rule: New content must follow this pattern. Adding content = adding/editing JSON
 
 ## [2026-03-09] Renderer: Forward Plus
 > 🇰🇷 [2026-03-09] 렌더러 Forward Plus 전환
-> **Category:** renderer | **Status:** ✅ 확정 | **Superseded By:** —
+> **Category:** renderer | **Status:** 🔄 수정됨 | **Superseded By:** [2026-03-19] Rendering: 2D
 
 - **변경:** `gl_compatibility` → `forward_plus`
   > 🇰🇷 OpenGL Compatibility에서 Forward Plus(D3D12/Vulkan)로 전환
@@ -155,7 +155,7 @@ Rule: New content must follow this pattern. Adding content = adding/editing JSON
 
 ## [2026-03-09] 3D Perspective Conversion
 > 🇰🇷 [2026-03-09] 3D 원근 시점 전환
-> **Category:** renderer | **Status:** ✅ 확정 | **Superseded By:** —
+> **Category:** renderer | **Status:** 🔄 수정됨 | **Superseded By:** [2026-03-19] Rendering: 2D
 
 - **변경:** 2D 아이소메트릭 → 3D BG3 스타일 원근 시점
 - **렌더러:** Compatibility → Forward Plus (Vulkan/D3D12) — GPU TDR 크래시 해소
@@ -319,6 +319,67 @@ Dev 폴더 전체가 Google Drive로 동기화되므로, 바이너리 에셋은 
 - **근거:** 중복 데이터 제거, ID 불일치 해소, `is_action_disabled()` 성능 수정
   > 🇰🇷 매 호출 JSON 로드 제거, disable_actions 필드 기반 캐싱
 - **설계 문서:** `handoff/plans/design/2026-03-14-status-data-consolidation.md`
+
+---
+
+## [2026-03-17] EngagementSystem 교전 쌍 캐싱 방식
+> 🇰🇷 [2026-03-17] 교전 시스템 쌍 캐싱 도입
+> **Category:** combat | **Status:** ✅ 확정 | **Superseded By:** —
+
+- **결정:** EngagementSystem이 `_pairs: Dictionary`로 교전 쌍을 관리 (CombatUnit에 포인터 추가 방식 불채택)
+  > 🇰🇷 CombatUnit 오염 없이 EngagementSystem 자체가 1:1 쌍을 캐싱
+- **해결한 버그 2종:**
+  1. 다중 교전 — `is_engaged()`가 매번 재계산 → 여러 적과 동시 교전 표시
+  2. 파트너 전환 — `_all_units` 순서 변화 시 파트너가 바뀌는 현상
+- **refresh() 규칙:**
+  - 기존 쌍 유효성 검사 (거리>1 or 정면 해제 → 삭제)
+  - 신규 쌍 등록 시 이미 `_pairs`에 있는 유닛은 건너뜀 (다중 교전 방지)
+  - 유닛은 첫 번째 조건 충족 상대와만 쌍 등록 (break)
+- **기회 공격:** `get_opportunity_attackers()` → 교전 파트너 1명만 반환
+- **GDScript 주의:** Dictionary 이터레이션 시 `for unit: CombatUnit in _pairs:` 타입 명시 필수
+  > 🇰🇷 `for unit in _pairs:` 는 Variant 추론 → Parser Error 발생
+
+---
+
+## [2026-03-19] Engine Transition: Godot → Unity
+> 🇰🇷 [2026-03-19] 엔진 전환: Godot → Unity
+> **Category:** engine | **Status:** ✅ 확정 | **Superseded By:** —
+
+- **변경:** Godot 4.6.1 + GDScript → Unity 6.3 LTS (6000.3.11f1) + C#
+  > 🇰🇷 엔진 및 언어 전면 전환
+- **프레임워크:** Turn Based Strategy Framework (TBSF) — $19.80 구매+임포트 완료
+  > 🇰🇷 TBSF 전용 턴제 전략 프레임워크 채택
+- **근거:** 3D 에셋 소싱 병목, Unity Asset Store 생태계, MCP 바이브코딩 지원
+  > 🇰🇷 솔로 개발 실용성 + Unity 생태계 활용
+- **영향:** GDScript 코드 전부 폐기, 씬/노드 전부 폐기, 설계 로직+JSON만 이식
+  > 🇰🇷 Godot 구현물 전면 폐기. 전투 알고리즘 설계 + JSON 데이터만 Unity로 이식.
+
+---
+
+## [2026-03-19] Rendering: 2D Confirmed (Dust and Salt Style)
+> 🇰🇷 [2026-03-19] 렌더링: 2D 확정 (Dust and Salt 스타일)
+> **Category:** renderer | **Status:** ✅ 확정 | **Superseded By:** —
+
+- **변경:** 3D Perspective → 2D
+  > 🇰🇷 3D BG3 스타일에서 2D로 전환
+- **비주얼 레퍼런스:** Dust and Salt (다크 중세 판타지, 일러스트+텍스트)
+  > 🇰🇷 다크 중세 판타지 일러스트 스타일. 텍스트 비중 높음.
+- **근거:** 2D 스프라이트 소싱이 3D보다 훨씬 용이, 솔로 개발 실용성
+  > 🇰🇷 에셋 소싱 난이도 해소가 핵심 근거
+
+---
+
+## [2026-03-19] Game Loop: 4-Layer Structure
+> 🇰🇷 [2026-03-19] 게임 루프: 4레이어 구조 확정
+> **Category:** engine | **Status:** ✅ 확정 | **Superseded By:** —
+
+- **구조:** Town/Camp → WorldMap → Battle → Roster Management
+  > 🇰🇷 4레이어: 마을/캠프 → 세계지도 → 전투 → 로스터 관리
+- **Town/Camp:** 마을 순회 + 이동식 캠프, 4대 자원 (Gold/Food/Morale/Reputation)
+- **WorldMap:** Dust and Salt식 포인트 클릭, 식량+피로도 소모, 이벤트 4종
+- **Battle:** 헥스 턴제 3~10명, 기존 T1~T2 이식, XP+루팅, HP→캠프/부상→마을
+- **Roster:** 5스탯 유지, 무기 기반 정체성(클래스 제거), 영구 사망
+- **설계 문서:** `handoff/plans/design/2026-03-19-crownfalle-game-loop-design.md`
 
 ---
 

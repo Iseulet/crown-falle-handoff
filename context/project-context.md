@@ -1,5 +1,5 @@
 # CrownFalle Proto — 프로젝트 컨텍스트
-> 생성일: 2026-03-15 | 갱신: 2026-03-15 세션2 | 세션: Claude Code
+> 생성일: 2026-03-19 | 세션: Claude Code
 
 ---
 
@@ -7,121 +7,85 @@
 
 | 항목 | 내용 |
 |------|------|
-| Phase | Phase A-2 완료 / Tier 1+2 전투 시스템 완료 / 전투 HUD UI-1~21 완료 |
-| 상태 | 이동 스킬화 + 스탯 구조 개편 완료 — Godot 런타임 테스트 대기 |
-| 마지막 작업 | [기능추가] move_remaining / ARM·RES 분리 커밋 (369066a) |
+| Phase | Phase 0 — TBSF 데모 체험 + Unity 환경 구축 |
+| 상태 | 엔진 전환 완료 (Godot → Unity 6.3 LTS). Unity 설치 완료, TBSF 임포트 완료. 데모 실행 대기. |
+| 엔진 | Unity 6.3 LTS (6000.3.11f1) + C# |
+| 프레임워크 | Turn Based Strategy Framework (TBSF) — 임포트 완료 |
+| Godot 코드 | 전면 폐기 (설계 로직 + JSON 데이터만 이식 대상) |
+| 마지막 커밋 | 351b064 [문서수정] 설정·설계문서·핸드오프 업데이트 |
 
 ---
 
-## 2026-03-15 세션2 작업 내용
+## 2026-03-19 엔진 전환 결정사항
 
-### 이동 스킬화 + 스탯 구조 개편
+### 확정 결정 3가지
+1. **Engine Transition** — Godot 4.6.1 + GDScript → Unity 6.3 LTS + C# + TBSF
+2. **Rendering: 2D** — 3D Perspective → 2D (Dust and Salt 스타일, 다크 중세 판타지)
+3. **Game Loop: 4-Layer** — Town/Camp → WorldMap → Battle → Roster Management
 
-**변경 목적 3가지:**
-1. `has_moved` 불리언 → `move_remaining` 풀 전환 (분할 이동 지원)
-2. ARM/RES를 CON/WIL 1차 파생에서 분리 → `class_config.default_arm/default_res` 고정값
-3. MV 스탯 폐기 → `class_config.move_range` 직접 사용
+### 전환 이유
+- 3D 에셋 소싱 병목 해소 (2D 스프라이트가 훨씬 수급 용이)
+- Unity Asset Store 생태계 활용
+- MCP 바이브코딩 지원
 
-**JSON 변경 (4개)**
-| 파일 | 변경 |
-|------|------|
-| `class_config.json` | `mv_base`→`move_range`, Mage 1→2, `default_arm/default_res` 추가 |
-| `active_skills.json` | `skill_move`, `skill_basic_attack`, `skill_vp_disengage` 3개 추가 |
-| `skill_bar_layout.json` | 슬롯 0/1/7에 `skill_id` 연결, type `"common_skill"` |
-| `combat_config.jsonc` | `dex_mv_coefficient` 삭제, `armor` 섹션 전체 삭제 |
+### 이식 대상 (유지)
+- 전투 알고리즘: StatCalculator, AttackResolver, BonusCalculator, EngagementSystem, StatusManager, SkillManager, ElementResolver, VPManager
+- JSON 데이터: combat_rules, weapon_table, skill_table, preset_config, wound_config, status_effects
 
-**GDScript 변경 (7개)**
-| 파일 | 변경 |
-|------|------|
-| `CombatUnit.gd` | `has_moved`/`move_range` 삭제, `move_remaining` 추가, ARM/RES→class_cfg, `get_max_move_range()`, `reset_for_new_turn()` |
-| `CombatScene.gd` | 이동 로직 전환, post-move highlight 재활성, 음수 방지, VP이탈 중복 제거 |
-| `SkillBar.gd` | 이동 슬롯 `move_remaining`/교전 체크, VP이탈 슬롯 교전 조건 |
-| `UnitStatusPanel.gd` | 이동 뱃지 `move_remaining` 표시 |
-| `DebugCombatPanel.gd` | `MV:%d` 표시 추가 |
-| `TestCombatScene.gd` | 레거시 참조 전수 교체 |
-| `SystemTestScene.gd` | ARM/RES/MV 수식 갱신 |
-
-**직업별 수치 확정**
-| 직업 | move_range | default_arm | default_res |
-|------|-----------|-------------|-------------|
-| Fighter | 4 | 20 | 5 |
-| Archer | 3 | 10 | 8 |
-| Rogue | 5 | 8 | 5 |
-| Mage | 2 | 5 | 18 |
-
-**버그 수정 (리뷰 후)**
-- `move_remaining` 음수 방지: `maxi(..., 0)`
-- VP이탈 후 `highlight_move_range` 중복 호출 제거
+### 폐기 대상
+- GDScript 코드 전부, Godot 씬(.tscn) 전부
+- 3D 관련: UnitRenderer3D, CameraDirector, EnvironmentBuilder, FBX 파이프라인
+- Godot 전용: GridManager → TBSF로 대체, DebugCombatPanel → Unity 재구현
 
 ---
 
-## 2026-03-15 세션1 작업 내용
+## 다음 작업 (Phase 0 — Unity 환경 구축)
 
-### 전투 HUD & 스킬 UI (UI-1~21) 구현 완료
+우선순위 순:
 
-**신규 스크립트 (scripts/ui/)**
-| 파일 | 담당 |
-|------|------|
-| `TopBar.gd` | 상단 Turn/VP 다이아몬드 표시 |
-| `UnitStatusPanel.gd` | 좌하단 아군 HUD (HP/ARM/RES/STA/MP + 상태이상 + 패시브) |
-| `SkillBar.gd` | 하단 8슬롯 스킬 바 (클래스별 동적 슬롯) |
-| `SkillSlot.gd` | 개별 슬롯 (6가지 상태, 비용 표시, CD 오버레이) |
-| `SkillTooltip.gd` | 호버 0.3초 후 스킬 상세 팝업 |
-| `TargetStatusPanel.gd` | 우하단 적 유닛 게이지 |
-| `DamagePreview.gd` | 예상 피해/적중/크리티컬/ARM흡수 팝업 |
-| `DisengageModal.gd` | VP이탈/강제이탈/취소 3버튼 모달 |
-| `CombatBanners.gd` | 적 행동 배너(UI-19), 기회공격 경고(UI-20), STA소진 경고(UI-21) |
+1. **TBSF 데모 씬 전부 실행 + 구조 문서화** `[설계:engine-transition]`
+   - TBSF 내장 그리드/턴/유닛 구조 파악
+   - 어떤 기능을 그대로 쓸 수 있는지 확인
+2. **TBSF 내장 대화 시스템 확인** `[설계:engine-transition]`
+3. **Unity MCP 설치 + Claude Code 연동 확인** `[설계:engine-transition]`
+4. **Newtonsoft Json.NET 설치** `[구현:engine-transition]`
+   - JSON 데이터 이식에 필요
+5. **DOTween 무료 코어 설치** `[구현:engine-transition]`
+6. **플레이스홀더 2D 스프라이트 수집** `[에셋:engine-transition]`
+7. **combat_config.json Unity 로드 테스트** `[구현:engine-transition]`
 
 ---
 
-## 미해결 사항
+## 게임 루프 4레이어 요약
 
-### 🟡 런타임 테스트 대기
-1. 유닛 선택 → `move_remaining` 반영 이동 하이라이트 확인
-2. 이동 후 잔여 `move_remaining` 하이라이트 재표시 확인
-3. 교전 성립 → 이동 슬롯 비활성 확인
-4. VP이탈 → 잔여 이동력으로 이동 가능 확인
-5. Fighter ARM=20, Mage RES=18 DebugPanel 확인
-6. 턴 시작 → `move_remaining` 리셋 확인
-7. 전체 UI 패널 표시 (UnitStatusPanel, SkillBar, DisengageModal)
-
-### 🟡 잔여 TODO (handoff/TODO.md 참조)
-- Godot에서 FBX 애니메이션 클립 이름 확인
-- HP_BAR_Y=1.8 높이 최종 조정
-- T1+T2 전체 검증
-- 샌드박스 씬 시나리오 8~11 연결
-- ProjectileManager + Projectile 씬 구현
+| 레이어 | 내용 |
+|--------|------|
+| Town/Camp | 마을 순회 + 이동식 캠프. 4대 자원: Gold/Food/Morale/Reputation |
+| WorldMap | Dust and Salt식 포인트 클릭. 식량+피로도 소모. 이벤트 4종 |
+| Battle | 헥스 턴제 3~10명. 기존 T1~T2 이식. XP+루팅. HP→캠프/부상→마을 |
+| Roster | 5스탯 유지. 무기 기반 정체성(클래스 제거). 영구 사망 |
 
 ---
 
-## 액티브 스킬 현황 (16개)
+## 설계 문서
 
-| 분류 | 스킬 ID | 이름 |
-|------|---------|------|
-| common | skill_move | 이동 |
-| common | skill_basic_attack | 기본 공격 |
-| common | skill_vp_disengage | VP 이탈 |
-| Fighter | skill_shield_bash | 방패 강타 |
-| Fighter | skill_taunt | 도발 |
-| Fighter | skill_war_cry | 전투 함성 |
-| Fighter | skill_heavy_strike | 강격 |
-| Archer | skill_aimed_shot | 조준 사격 |
-| Archer | skill_poison_arrow | 독화살 |
-| Archer | skill_crippling_shot | 다리 저격 |
-| Rogue | skill_smoke_screen | 연막 |
-| Rogue | skill_hemorrhage | 출혈 공격 |
-| Rogue | skill_shadow_strike | 암습 |
-| Mage | skill_fireball | 화염구 |
-| Mage | skill_lightning_bolt | 번개 볼트 |
-| Mage | skill_water_bolt | 물 화살 |
+| 문서 | 경로 | 상태 |
+|------|------|------|
+| 게임 루프 설계 | `handoff/plans/design/2026-03-19-crownfalle-game-loop-design.md` | ✅ 확정 (Desktop 생성) |
+| 에셋 요구사항 | `handoff/plans/design/2026-03-19-crownfalle-asset-requirements.md` | ✅ 확정 (Desktop 생성) |
+
+> ⚠️ 위 2개 파일은 Claude Desktop에서 생성됨. Claude Code로 수신 완료.
 
 ---
 
-## 최근 커밋 이력
+## 이전 세션 요약 (Godot — 2026-03-17까지)
 
-| 커밋 | 내용 |
-|------|------|
-| 369066a | [기능추가] 이동 스킬화 + 스탯 구조 개편 (move_remaining / ARM·RES 분리) |
-| 3ca422e | [기능추가] 전투 HUD & 스킬 UI (UI-1~21) + 직업별 스킬 확장 (30파일) |
-| 4864ee2 | [문서수정] 데스크탑 싱크 컨텍스트 갱신 — TODO 구현 완료 반영 |
-| 4c6d54d | [문서수정] 데스크탑 싱크 컨텍스트 갱신 — 03-13 reference + 03-14 context |
+| 완료 항목 | 내용 |
+|-----------|------|
+| 전투 시스템 재구축 | NewCombatScene, NewTurnManager, AttackResolver, BonusCalculator 등 |
+| 교전 버그 수정 | EngagementSystem _pairs 캐싱 방식 (다중 교전 방지) |
+| 전투 HUD | UI-1~21 (TopBar, UnitStatusPanel, SkillBar 등) |
+| Tier 1~2 | 스탯/데미지/교전/스킬/원소/VP 시스템 |
+| 데이터 JSON | combat_rules, weapon_table, skill_table, preset_config, wound_config |
+
+> 위 구현물은 모두 폐기. 설계 알고리즘만 Unity로 이식.
