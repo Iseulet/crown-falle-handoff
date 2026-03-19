@@ -135,7 +135,7 @@ Accept all case variations:
 > 🇰🇷 에이전트 호출 범위 규칙
 
 Agent calls are only valid inside project folders containing an `agents/` directory.
-When called from `D:\Dev\` (global):
+When called from `C:\Users\iseul\OneDrive\Dev\` (global):
 "⚠️ 에이전트는 프로젝트 폴더에서만 호출 가능합니다.
 crown-falle-proto 폴더로 이동 후 실행해주세요."
 > 🇰🇷 에이전트 호출은 agents/ 폴더가 있는 프로젝트에서만 유효
