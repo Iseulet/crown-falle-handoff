@@ -6,10 +6,11 @@
 
 ---
 
-## 엔진 전환 (2026-03-19)
+## 엔진 전환 + 레이어 기획 (2026-03-19)
 
 | 상태 | 날짜 | 파일명 | 내용 |
 |------|------|--------|------|
+| ✅ Done | 2026-03-19 | crownfalle-layer-reference-research | 전투 외 레이어 기획 레퍼런스 조사 (6게임 비교, 37개 결정사항) |
 | ✅ Done | 2026-03-19 | crownfalle-game-loop-design | 4-Layer 게임 루프 설계 (Unity 전환) |
 | ✅ Done | 2026-03-19 | crownfalle-asset-requirements | 에셋 & 프레임워크 요구사항 |
 

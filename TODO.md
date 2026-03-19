@@ -23,6 +23,13 @@
 - [ ] 플레이스홀더 2D 스프라이트 수집 `[에셋:engine-transition]` `[2026-03-19]`
 - [ ] combat_config.json Unity 로드 테스트 `[구현:engine-transition]` `[2026-03-19]`
 
+### 레이어 기획 세션 (Phase 0 병행) `[설계:layer-design]` `[2026-03-19]`
+- [ ] Town/Camp 기획 세션 (12개 결정사항 확정) `[설계:layer-design]` `[2026-03-19]`
+- [ ] WorldMap 기획 세션 (11개 결정사항 확정) `[설계:layer-design]` `[2026-03-19]`
+- [ ] Roster 기획 세션 (14개 결정사항 확정) `[설계:layer-design]` `[2026-03-19]`
+- [ ] 자원 흐름 통합 설계 (4대 자원 × 4레이어) `[설계:layer-design]` `[2026-03-19]`
+- [ ] 세계관/스토리 기초 설정 `[설계:worldbuilding]` `[2026-03-19]`
+
 ### 이식 대상 (전투 로직 — Unity 재구현 시 착수)
 - [ ] data/skills/status_effects.json 정리 (Unity 이식 시 경로 정비) `[구현:03-14]` `[2026-03-14]`
 - [ ] is_skip_turn / fear disable_actions 충돌 — 전투 로직 이식 시 C# 재검토 `[구현:03-14]` `[2026-03-14]`
