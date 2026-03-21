@@ -1,5 +1,5 @@
 # CrownFalle Proto — 프로젝트 컨텍스트
-> 생성일: 2026-03-19 | 세션: Claude Code
+> 생성일: 2026-03-19 | 갱신: 2026-03-20 | 세션: Claude Code
 
 ---
 
@@ -13,6 +13,29 @@
 | 프레임워크 | Turn Based Strategy Framework (TBSF) — 임포트 완료 |
 | Godot 코드 | 전면 폐기 (설계 로직 + JSON 데이터만 이식 대상) |
 | 마지막 커밋 | 351b064 [문서수정] 설정·설계문서·핸드오프 업데이트 |
+
+---
+
+## 2026-03-20 세션 완료 사항
+
+### 프로젝트 지침 전면 갱신 (CLI)
+- **CLAUDE.md / GEMINI.md**: Session Start Order 경로 D:\Dev → C:\Users\iseul\OneDrive\Dev\
+- **WORKFLOW_OVERVIEW.md**: Unity 전환 + 4-Layer 게임 루프 + 6개 레퍼런스 + C# 컨벤션 전면 갱신
+- **handoff/CURRENT.md**: 활성 프로젝트 crown-falle-TBSF로 갱신
+- **handoff/PROJECTS.md**: 4개 프로젝트 등록 (TBSF 활성, proto 보관, Interlude/handoff 추가)
+- **handoff/DECISIONS.md**: 환경 이전 + 엔진 전환 + Interlude 신설 결정 추가
+
+### Interlude 프로젝트 구조 생성 (CLI)
+- **위치**: `C:\Users\iseul\OneDrive\Dev\Story\crown-falle-Interlude\`
+- 29개 파일 생성 (README, INDEX, CLAUDE, PROTOCOL, world/6, story/7, characters/6, locations/3, quests/5, exports/1, archive/1, agents/1)
+- PROTOCOL.md 기반 전체 폴더/템플릿 구조 완성
+
+### Interlude 에이전트 파이프라인 v3 적용 (CLI)
+- v2.0 파일 16개 → v3 파일 16개 교체 (files.zip 배포)
+- 신규: `carry.md` (하트+보이스 통합 캐릭터 검증자)
+- 삭제: `empath.md`, `voice_coach.md` (carry에 통합)
+- v2 백업: `_backup_v2/` (작가 확인 후 삭제 예정)
+- 주요 변경: Phase 0(Ideation) 신설, 히스 이중 모드, 페이서-매크로 Phase I 이동
 
 ---
 
@@ -43,7 +66,7 @@
 
 - **Phase 0**: TBSF 데모 체험 + 환경 구축 (대기)
 - **레이어 기획**: 레퍼런스 조사 완료 (6게임, 37개 결정사항), 기획 세션 대기 (Town→WorldMap→Roster→통합)
-- **세계관**: 스토리 기반 프로젝트 별도 진행 예정
+- **세계관**: Interlude 프로젝트 구조 완성. 에이전트 파이프라인 v3 적용 완료. 브레인덤프 대기.
 
 ---
 
@@ -57,10 +80,13 @@
 2. **TBSF 내장 대화 시스템 확인** `[설계:engine-transition]`
 3. **Unity MCP 설치 + Claude Code 연동 확인** `[설계:engine-transition]`
 4. **Newtonsoft Json.NET 설치** `[구현:engine-transition]`
-   - JSON 데이터 이식에 필요
 5. **DOTween 무료 코어 설치** `[구현:engine-transition]`
 6. **플레이스홀더 2D 스프라이트 수집** `[에셋:engine-transition]`
 7. **combat_config.json Unity 로드 테스트** `[구현:engine-transition]`
+
+**Interlude 다음 작업:**
+- `_backup_v2/` 삭제 확인 (v3 검증 후)
+- 브레인덤프 시작 (`story/drafts/braindump/`)
 
 ---
 
@@ -81,8 +107,7 @@
 |------|------|------|
 | 게임 루프 설계 | `handoff/plans/design/2026-03-19-crownfalle-game-loop-design.md` | ✅ 확정 (Desktop 생성) |
 | 에셋 요구사항 | `handoff/plans/design/2026-03-19-crownfalle-asset-requirements.md` | ✅ 확정 (Desktop 생성) |
-
-> ⚠️ 위 2개 파일은 Claude Desktop에서 생성됨. Claude Code로 수신 완료.
+| 레이어 레퍼런스 | `handoff/plans/design/2026-03-19-crownfalle-layer-reference-research.md` | ✅ 확정 (Desktop 생성) |
 
 ---
 
