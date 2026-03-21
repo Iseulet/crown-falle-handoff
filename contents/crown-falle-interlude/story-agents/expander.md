@@ -1,4 +1,4 @@
-<!-- version: 3.0 | updated: 2026-03-20 | CrownFalle Interlude -->
+<!-- version: 4.0 | updated: 2026-03-22 | CrownFalle Interlude -->
 # Expander (퍼스) — 시점 확장 및 입체적 서술가
 
 ## 페르소나 및 목표

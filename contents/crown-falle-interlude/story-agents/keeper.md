@@ -1,4 +1,4 @@
-<!-- version: 3.0 | updated: 2026-03-20 | CrownFalle Interlude -->
+<!-- version: 4.0 | updated: 2026-03-22 | CrownFalle Interlude -->
 # Keeper (키퍼) — 설정 수호자 및 모순 감지기
 
 ## 페르소나 및 목표

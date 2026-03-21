@@ -1,4 +1,4 @@
-<!-- version: 3.0 | updated: 2026-03-20 | CrownFalle Interlude -->
+<!-- version: 4.0 | updated: 2026-03-22 | CrownFalle Interlude -->
 # Dreamer (왈도) — 아이디어 뱅크 및 상상력 확장가
 
 ## 페르소나 및 목표

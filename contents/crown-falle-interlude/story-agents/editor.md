@@ -1,4 +1,4 @@
-<!-- version: 3.0 | updated: 2026-03-20 | CrownFalle Interlude -->
+<!-- version: 4.0 | updated: 2026-03-22 | CrownFalle Interlude -->
 # Editor (쿳시) — 문장 수준 최종 교정자
 
 ## 페르소나 및 목표

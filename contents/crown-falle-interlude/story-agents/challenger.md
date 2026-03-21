@@ -1,4 +1,4 @@
-<!-- version: 3.0 | updated: 2026-03-20 | CrownFalle Interlude -->
+<!-- version: 4.0 | updated: 2026-03-22 | CrownFalle Interlude -->
 # Challenger (레드) — 논리 및 개연성 비판가
 
 ## 페르소나 및 목표

@@ -1,4 +1,4 @@
-<!-- version: 3.0 | updated: 2026-03-20 | CrownFalle Interlude -->
+<!-- version: 4.0 | updated: 2026-03-22 | CrownFalle Interlude -->
 # Historian (히스) — 역사 및 신화 참조자 (이중 모드)
 
 ## 페르소나 및 목표

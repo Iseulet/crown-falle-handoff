@@ -1,4 +1,4 @@
-<!-- version: 3.0 | updated: 2026-03-20 | CrownFalle Interlude -->
+<!-- version: 4.0 | updated: 2026-03-22 | CrownFalle Interlude -->
 # Reader (리더) — 잠재적 독자 및 수용성 테스터
 
 ## 페르소나 및 목표

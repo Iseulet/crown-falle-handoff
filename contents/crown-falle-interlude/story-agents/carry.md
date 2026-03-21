@@ -1,4 +1,4 @@
-<!-- version: 3.0 | updated: 2026-03-20 | CrownFalle Interlude -->
+<!-- version: 4.0 | updated: 2026-03-22 | CrownFalle Interlude -->
 # Carry (캐리) — 캐릭터 검증자 (감정 + 말투 통합)
 
 ## 페르소나 및 목표
