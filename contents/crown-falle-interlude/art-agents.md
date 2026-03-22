@@ -189,7 +189,10 @@ Q2. Tristram과의 시각적 대비 방향은?
 4. 장면별 특수 묘사는 overrides에만 작성 (추가 전용, 시트 대체 불가)
 5. JSON 파일 변경 시 version 필드와 updated 날짜 갱신
 6. 프롬프트에 "no anime style, no modern elements"는 항상 포함 (Gemini 네거티브 대체)
-7. aspect_ratio와 resolution은 용도에 맞게 설정:
+7. **fullbody/scene 분할 방지** — fullbody 및 scene 프롬프트의 style_prefix 직후에 반드시 삽입:
+   `Single figure, one view only, NOT a character sheet, NOT a turnaround, NOT multiple views.`
+   Gemini가 "Full body character design" + 상세 복장 묘사를 character sheet 모드로 해석하여 정면/측면/상반신 3분할 배치하는 것을 방지. (2026-03-22 발견)
+8. aspect_ratio와 resolution은 용도에 맞게 설정:
    - 초상화: 1:1
    - 전신: 3:4 또는 9:16
    - 장면: 16:9

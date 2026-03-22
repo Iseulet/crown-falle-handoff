@@ -6,14 +6,14 @@ Each category belongs to a **convention group** with independent style/resolutio
 
 | Category | Description | Convention Group | Style Direction | Status |
 |----------|-------------|-----------------|----------------|--------|
-| **characters** | Portraits, fullbody, emotion variants | `narrative` | Painterly 2D, Dust and Salt | Active |
-| **scenes** | Story event CGs | `narrative` | Painterly 2D, Dust and Salt | Active |
-| **backgrounds** | Environment landscapes (no characters) | `narrative` | Painterly 2D (same tone) | Future |
-| **creatures** | Creatures/monsters | `narrative` | Painterly 2D (same tone) | Future |
+| **characters** | Portraits, fullbody, emotion variants | `narrative` | Dark Oil Renaissance, Caravaggio chiaroscuro | Active |
+| **scenes** | Story event CGs | `narrative` | Dark Oil Renaissance, Caravaggio chiaroscuro | Active |
+| **backgrounds** | Environment landscapes (no characters) | `narrative` | Dark Oil Renaissance (same tone) | Future |
+| **creatures** | Creatures/monsters | `narrative` | Dark Oil Renaissance (same tone) | Future |
 | **maps** | World map, region maps | `worldmap` | Point-click, parchment/map style | Future |
 | **ingame** | In-game character sprites | `ingame` | Pixel/sprite/SD (TBD) | Future |
 | **items** | Items/equipment standalone | `ingame` (tentative) | TBD | Future |
 | **ui** | UI assets — icons, frames | `ui` | Vector/flat/medieval ornament (TBD) | Future |
-| **promo** | Key visuals, promotional | `narrative` | Painterly 2D (high-res) | Future |
+| **promo** | Key visuals, promotional | `narrative` | Dark Oil Renaissance (high-res) | Future |
 
 > 🇰🇷 새 카테고리 추가 시 _config.json의 category_convention_map에도 등록 필요.
