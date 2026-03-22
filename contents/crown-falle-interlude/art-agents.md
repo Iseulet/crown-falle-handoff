@@ -195,7 +195,10 @@ Q2. Tristram과의 시각적 대비 방향은?
    - style_prefix 다음에 "A single painting of one person. Not a character sheet. Not multiple views." 반드시 포함
    - scene 프롬프트에는 "A single painting. Not a character sheet. Not multiple views." (다인물 장면은 "of one person" 제거)
    - (2026-03-22 Wren fullbody로 검증 완료)
-8. aspect_ratio와 resolution은 용도에 맞게 설정:
+8. **fullbody 종횡비는 9:16. 3:4 사용 금지** (비율 과장 발생, 2026-03-22 검증).
+   비율 보정 줄 필수: "Realistic human body proportions — head is one-eighth of total height, legs make up half the body length. Tall vertical composition."
+   상체 묘사가 무거운 캐릭터(갑옷, 변이 등)는 LOWER BODY 섹션을 별도 문단으로 분리하여 하체 비중 확보.
+9. aspect_ratio와 resolution은 용도에 맞게 설정:
    - 초상화: 1:1
    - 전신: 3:4 또는 9:16
    - 장면: 16:9
