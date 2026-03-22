@@ -198,7 +198,12 @@ Q2. Tristram과의 시각적 대비 방향은?
 8. **fullbody 종횡비는 9:16. 3:4 사용 금지** (비율 과장 발생, 2026-03-22 검증).
    비율 보정 줄 필수: "Realistic human body proportions — head is one-eighth of total height, legs make up half the body length. Tall vertical composition."
    상체 묘사가 무거운 캐릭터(갑옷, 변이 등)는 LOWER BODY 섹션을 별도 문단으로 분리하여 하체 비중 확보.
-9. aspect_ratio와 resolution은 용도에 맞게 설정:
+9. **프롬프트 맨 첫 줄에 종횡비 지시 포함** (Gemini 웹에서 수동 선택 불가, 2026-03-22 검증):
+   - fullbody: `Generate this image in 9:16 portrait orientation, tall and narrow vertical format.`
+   - scene: `Generate this image in 16:9 landscape orientation, wide horizontal format.`
+   - portrait: 종횡비 지시 불필요 (기본 비율 적절)
+   이 줄은 style_prefix보다 앞에 위치해야 함.
+10. aspect_ratio와 resolution은 용도에 맞게 설정:
    - 초상화: 1:1
    - 전신: 3:4 또는 9:16
    - 장면: 16:9
