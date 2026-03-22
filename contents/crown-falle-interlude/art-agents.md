@@ -201,7 +201,7 @@ Q2. Tristram과의 시각적 대비 방향은?
 9. **프롬프트 맨 첫 줄에 종횡비 지시 포함** (Gemini 웹에서 수동 선택 불가, 2026-03-22 검증):
    - fullbody: `Generate this image in 9:16 portrait orientation, tall and narrow vertical format.`
    - scene: `Generate this image in 16:9 landscape orientation, wide horizontal format.`
-   - portrait: 종횡비 지시 불필요 (기본 비율 적절)
+   - portrait: `Generate this image in 1:1 square format.`
    이 줄은 style_prefix보다 앞에 위치해야 함.
 10. aspect_ratio와 resolution은 용도에 맞게 설정:
    - 초상화: 1:1
