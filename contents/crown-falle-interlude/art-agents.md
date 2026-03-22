@@ -178,7 +178,7 @@ Q2. Tristram과의 시각적 대비 방향은?
 - 원주의 직접 프롬프트 수정 요청
 
 **산출물:**
-- prompts/ 하위 JSON 파일 (sheet.json, portrait.json, scene.json 등)
+- prompts.json (portrait/fullbody/scene 통합. 내부 type 필드로 구분)
 - 일괄 요청 프롬프트 (Gemini 웹용 복붙 텍스트)
 - 프롬프트 버전 관리 (v1 → v2 → ...)
 
@@ -359,7 +359,7 @@ Q2. Tristram과의 시각적 대비 방향은?
 
 6. @Prompter
    → 확정 시트 → sheet.json 작성
-   → portrait.json, fullbody.json 작성
+   → prompts.json 작성 (portrait/fullbody/scene 통합)
    → 프롬프트 생성
 
 7. [이미지 생성 — CLI 또는 Gemini 웹]

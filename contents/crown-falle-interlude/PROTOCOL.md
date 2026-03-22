@@ -221,7 +221,7 @@ Beat 설계
    외형 시트 확정 → characters/{id}/art/sheet.json
         |
         v
-   @Prompter: portrait.json / fullbody.json 작성
+   @Prompter: prompts.json 작성
         | 이미지 생성
         v
    @Curator: 시트 대조 → 보강/채택
@@ -322,6 +322,9 @@ crown-falle-interlude/
 +-- _braindump/                       <- 브레인덤프 (미확정, 성장 중)
 |   +-- crownfalle-interlude_braindump.md
 |   +-- STATUS.md
+|   +-- desktop-context/              <- Desktop 프로젝트 지식 갱신 출력
+|       +-- canon-summary.md
+|       +-- crownfalle-interlude_braindump.md (복사본)
 |
 +-- _tools/                           <- 도구 (이미지 생성 스크립트 등)
 |   +-- art-gen/
@@ -344,10 +347,11 @@ crown-falle-interlude/
 |   |   +-- cendrefort/
 |   |   +-- highclere/
 |   |   +-- royal-capital/
-|   +-- rules/                        <- 마법·제도
-|       +-- logos.md
-|       +-- grimme-echo.md
-|       +-- soul-transfer.md
+|   +-- rules/                        <- 마법·제도·지형·전쟁
+|       +-- magic.md                  <- 로고스 + 그림메-에코 + 영혼 이주 통합
+|       +-- succession.md
+|       +-- geography.md
+|       +-- scepter-war.md
 |
 +-- characters/                       <- 캐릭터 (서사+아트 통합)
 |   +-- main/                         <- 주요 캐릭터 (풀 프로필 + 아트)
@@ -355,7 +359,7 @@ crown-falle-interlude/
 |   |   |   +-- profile.md
 |   |   |   +-- art/
 |   |   |       +-- sheet.json
-|   |   |       +-- portrait.json
+|   |   |       +-- prompts.json
 |   |   |       +-- _favorites/
 |   |   +-- seren/
 |   |   +-- colt/
@@ -381,6 +385,9 @@ crown-falle-interlude/
 +-- maps/                             <- 지도 (세계 지도, 지역 지도)
 |   +-- prompts/
 |   +-- _favorites/
+|
++-- meta/                             <- 3작품 관통 구조 등 메타 설정
+|   +-- trilogy-structure.md
 |
 +-- _archive/                         <- 폐기·백업
     +-- agents-v3/
@@ -493,7 +500,62 @@ crown-falle-interlude/
 
 ---
 
-## 10. 후속 과제 (해당 단계 진입 시 정립)
+## 10. Desktop Context Refresh
+
+### 개요
+
+Desktop 프로젝트 지식에 올리는 파일 3종을 최신 상태로 유지하는 규칙.
+갱신은 CLI의 `/desktop-refresh` 명령어로 실행한다.
+
+### Desktop 프로젝트 지식 구성 (3파일)
+
+| # | 파일 | 역할 | 갱신 빈도 |
+|---|------|------|----------|
+| 1 | `desktop-project-instructions.md` | 세션 프로토콜, 역할 분담, 프로젝트 경로 | 드물게 (프로토콜 변경 시) |
+| 2 | `canon-summary.md` | 전체 캐논 요약 (캐릭터/장소/세력/규칙/서사 축약) | 캐논 변경 시 |
+| 3 | `crownfalle-interlude_braindump.md` | 경량화 브레인덤프 (서사 흐름 + 장면 상세 + 미결 사항) | 브레인덤프 변경 시 |
+
+### 갱신 트리거
+
+| 트리거 | 갱신 대상 |
+|--------|----------|
+| 브레인덤프에 새 확정 사항 추가 (1 발상 세션 후) | braindump |
+| 캐논 분리 발생 (2 정리 세션 후) | canon-summary + braindump |
+| 캐논 파일의 [미확정] → [확정] 전환 | canon-summary |
+| 서사 흐름에 구조적 변경 | canon-summary + braindump |
+| 새 엔티티 캐논 추가 | canon-summary |
+| 프로토콜/역할/경로 변경 | desktop-project-instructions |
+
+### 갱신 규칙
+
+1. **canon-summary.md는 캐논 파일에서 추출.** 브레인덤프가 아니라 분리된 캐논 파일이 소스.
+2. **braindump는 원본 복사.** `_braindump/crownfalle-interlude_braindump.md`를 그대로 출력.
+3. **canon-summary 분량 제한: 200줄 이내.** Desktop 컨텍스트 효율을 위해.
+4. **갱신 시 이전 버전을 덮어쓴다.** 버전 관리는 git이 담당.
+5. **갱신 후 원주에게 알림.** "Desktop 프로젝트 지식 갱신 완료. 파일을 교체해주세요."
+
+### 출력 경로
+
+```
+_braindump/desktop-context/
+├── canon-summary.md
+├── crownfalle-interlude_braindump.md   (원본 복사)
+└── desktop-project-instructions.md     (변경 시에만)
+```
+
+원주가 이 폴더에서 파일을 가져다 Desktop 프로젝트 지식에 올린다.
+
+### 명령어 형식
+
+```
+/desktop-refresh              # 전체 갱신 (canon-summary + braindump 복사)
+/desktop-refresh --summary    # canon-summary만 갱신
+/desktop-refresh --all        # desktop-project-instructions 포함 전체
+```
+
+---
+
+## 11. 후속 과제 (해당 단계 진입 시 정립)
 
 | # | 항목 | 트리거 |
 |---|------|--------|
@@ -510,4 +572,7 @@ crown-falle-interlude/
 |------|------|------|
 | v3.0 | 2026-03-20 | 스토리 에이전트 13+1개, 5 Phase 파이프라인 |
 | v4.0 | 2026-03-22 | 4단계 워크플로우 재편. 시스 → 프로토콜 규칙. 페이서 통합. 폴더 구조 엔티티 중심 재편. 스토리↔아트 연결 흐름 명시. 캐릭터 main/minor 분리 |
-| v4.1 | 2026-03-22 | 1→2 전환 트리거 추가. 브레인덤프 경량화 형식 정의. 부분 확정 마커. 포지/아크 역할 경계. 키퍼 이중 모드. 캐리 2 산출물(감정 아크 섹션). STORY_INDEX.json → STATUS.md 대체. 지도 워크플로우 명시. 핸드오프 매핑 갱신. _tools/ 추가. generate.py 경로 수정을 후속 과제(F-4)로 등록 |
+| v4.1 | 2026-03-22 | 1→2 전환 트리거 추가. 브레인덤프 경량화 형식 정의. 부분 확정 마커. 포지/아크 역할 경계. 키퍼 이중 모드. 캐리 2 산출물(감정 아크 섹션). 지도 워크플로우 명시. 핸드오프 매핑 갱신. _tools/ 추가. generate.py 경로 수정을 후속 과제(F-4)로 등록 |
+| v4.2 | 2026-03-22 | 캐논 분리 17건 반영. world/rules/ 파일명 변경(logos+grimme-echo+soul-transfer→magic.md 통합, succession/geography/scepter-war 신규). meta/ 폴더 추가. STORY_INDEX.json 복원(STATUS.md=사람용 상태표, STORY_INDEX.json=기계적 경로 추적으로 역할 분리). Armand main 유지 확정 |
+| v4.3 | 2026-03-22 | Desktop Context Refresh 섹션 추가 (섹션 10). /desktop-refresh 명령어 정의. desktop-context/ 폴더 추가. 후속 과제 → 섹션 11로 이동 |
+| v4.4 | 2026-03-23 | 프롬프트 파일 통합: portrait.json+fullbody.json → prompts.json 단일 파일. 프롬프트 type은 파일 내 type 필드로 구분. generate_v2.py, build.py 경로 갱신. art-agents.md 산출물/워크플로우 갱신 |
