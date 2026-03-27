@@ -1,7 +1,7 @@
 # CrownFalle ImageGen — 에이전트 설계
-> Art\crown-falle-imagegen\AGENTS.md
-> 날짜: 2026-03-21
-> 환경: Desktop + CLI 공유
+> `contents/crown-falle-interlude/_protocol/art-agents.md`
+> 최종 수정: 2026-03-27
+> 환경: Desktop + CLI 공유 | 생성 도구: ComfyUI (로컬 API)
 
 ---
 
@@ -150,6 +150,18 @@ Q2. Tristram과의 시각적 대비 방향은?
 4. 확정된 글로벌 스타일 프리픽스를 함부로 바꾸지 않음 — 변경 시 원주 승인 필요
 5. 게임 4-Layer 루프(Town/WorldMap/Battle/Roster)를 고려해 필요한 비주얼 콘텐츠 제안
 
+**도구 선택 기준 (Gemini vs ComfyUI):**
+
+| 작업 유형 | 권장 도구 | 이유 |
+|----------|----------|------|
+| 배경/장면 (scene, 16:9) | Gemini Web | 자연어 서술로 분위기 표현에 강점. 토큰 제한 없음 |
+| 포트레이트 반복 생성 (portrait, standing) | ComfyUI | 빠른 배치 생성. 표정/복장 잠금 키워드로 반복성 확보 |
+| 초기 외형 확정 테스트 | Gemini Web | 스타일 일관성이 더 안정적. ComfyUI 결과가 검증된 후 전환 |
+| 스타일 드래프트 비교 | 둘 다 | Gemini를 기준으로 ComfyUI 결과와 나란히 비교 |
+
+도구 전환 결정은 @ArtDirector 권한. @Curator가 Gemini vs ComfyUI 비교 결과를 제공하면
+@ArtDirector가 해당 캐릭터/카테고리에 적합한 도구를 확정한다.
+
 **제안 가능 범위 (아이디어 제시):**
 - "Colt는 The Scald의 부관이니 군인다운 외형이 좋겠다 — 짧은 머리, 넓은 어깨"
 - "Ironmead 배경은 곡창+변경 설정이니 넓은 벌판 + 원거리 요새 실루엣"
@@ -178,9 +190,59 @@ Q2. Tristram과의 시각적 대비 방향은?
 - 원주의 직접 프롬프트 수정 요청
 
 **산출물:**
-- prompts.json (portrait/fullbody/scene 통합. 내부 type 필드로 구분)
+- `characters/main/{char}/art/prompts.json` (portrait/fullbody/scene 통합. 내부 type 필드로 구분)
+- `characters/main/{char}/art/sheet.json` (캐릭터 외형 시트)
+- `tools/comfyui/prompts/{category}/batch_{name}.txt` (ComfyUI CLI 배치 파일)
 - 일괄 요청 프롬프트 (Gemini 웹용 복붙 텍스트)
 - 프롬프트 버전 관리 (v1 → v2 → ...)
+
+**ComfyUI CLI 생성 시 flags:**
+```bash
+# 단일 캐릭터 — _favorites에 직접 저장 (doc-viewer 즉시 반영)
+python tools/comfyui/generate.py \
+  --prompt "..." --negative "photorealistic, modern" --model sd15 \
+  --char tristram --prompt-id portrait_default
+
+# [positive]/[negative] 섹션 파일로 배치
+python tools/comfyui/generate.py \
+  --batch tools/comfyui/prompts/comfyui/portraits/wren.txt --model sd15
+
+# prompts.json comfyui_prompt 필드로 일괄 생성
+python tools/comfyui/generate.py --from-json --char wren
+python tools/comfyui/generate.py --from-json --char wren --only portrait --skip-existing
+```
+
+**ComfyUI 프롬프트 작성 규칙 (prompts.json `comfyui_prompt` 필드):**
+
+1. **총 250자 이내** (CLIP ~75 토큰 한계). 자연어 서술 대신 키워드 태그 중심
+2. **스타일 가중치 필수**: `(oil painting:1.3), (painterly:1.2), (brushstroke texture:1.1)` — 없으면 포토리얼 출력
+3. **Aspect ratio 텍스트 제거**: "Generate this image in 1:1 square format." 포함 금지 (ComfyUI는 width/height로 처리)
+4. **머리색/복장 잠금 필수**: `"dirty blonde, light blonde-brown hair"`, `"fully clothed, loose boyish tunic"` 등 명시
+5. **나이 표현은 긍정 키워드**: `"17 years old, teenage"` (NOT `"not a child"` — ComfyUI 네거티브 효과 제한적)
+6. **스타일 프리픽스는 art-config.json `comfyui_style_prefix`** 참조 — 직접 작성 금지
+7. **네거티브는 generate.py NEGATIVE_DEFAULT가 담당** — `comfyui_prompt`에 중복 불필요
+8. `[positive]/[negative]` 섹션 파일(`.txt`) 형식도 지원 — 섹션 파일은 250자 제한 없이 확장 가능
+
+**ComfyUI 구조 예시 (250자 이내):**
+```
+portrait of a teenage girl, 17 years old, dirty blonde loose tied hair,
+grey-green eyes, freckles, pale skin, oversized dark tunic, patched shawl,
+quiet composed expression, three-quarter view, warm side lighting,
+(oil painting:1.3), (painterly:1.2), dark background
+```
+
+**@Curator 피드백 수신 시 처리:**
+
+@Curator로부터 아래 형식으로 수정 지시를 받으면, `comfyui_prompt` 필드를 수정하고 재생성한다.
+
+```
+@Prompter 수정 지시 — {char} {prompt_id}
+- [스타일] ... → (oil painting) 가중치 상향
+- [머리색] ... → negative에 'black hair, dark hair' 추가
+- [복장]   ... → positive에 'fully clothed, ...' 추가
+```
+
+수정 후: `generate.py --from-json --char {char} --only {type}` 으로 재생성.
 
 **규칙:**
 1. 모든 프롬프트는 글로벌 스타일 프리픽스를 포함해야 함
@@ -306,6 +368,44 @@ Q2. Tristram과의 시각적 대비 방향은?
 
 채택 추천은 001이지만, 최종 결정은 원주.
 ```
+
+**Gemini vs ComfyUI 비교 프로세스:**
+
+ComfyUI로 생성한 이미지를 기존 Gemini 결과와 비교할 때:
+
+```
+[Step 1] 나란히 대조
+  → 동일 prompt_id의 Gemini 결과 vs ComfyUI 결과 비교
+  → 항목별 판정: ✅ Gemini 우위 / ✅ ComfyUI 우위 / ⚠️ 비슷함
+
+[Step 2] 차이 정량화
+  → 스타일 일치도 (유화 질감, 카라바조 명암)
+  → 캐릭터 외형 정확도 (머리색, 복장, 나이 인상)
+  → 전체 톤 (어둡고 거친 다크 판타지 분위기)
+  → ComfyUI가 Gemini 기준 몇 % 수준인지 추정
+
+[Step 3] 개선 가능 여부 판단
+  → 80% 이상: "ComfyUI 채택 권장"
+  → 50~80%: "프롬프트 보정 후 재시도 권장"
+  → 50% 미만: "해당 카테고리는 Gemini 유지 권장"
+
+[Step 4] @Prompter 전달 포맷 작성 (보정 필요 시)
+```
+
+**@Prompter 전달 포맷:**
+
+```
+@Prompter 수정 지시 — {char} {prompt_id}
+Gemini 대비 ComfyUI 결과 차이:
+- [스타일] 사진 질감 → (oil painting) 가중치 1.3 → 1.5로 상향
+- [머리색] 흑발로 출력 → negative에 'black hair, dark hair' 추가
+- [복장]   가슴 노출 → positive에 'fully clothed, loose boyish tunic' 추가
+
+기준: Gemini 결과의 [유화 질감 / 머리색 / 분위기] 에 근접할 것.
+```
+
+2회 수정 후에도 50% 미만이면 @ArtDirector에 에스컬레이션:
+"해당 캐릭터 {prompt_id} — ComfyUI로 Gemini 수준 재현 어려움. 도구 전환 여부 판단 필요."
 
 **규칙:**
 1. **독단 채택/기각 금지** — 분석 결과와 선택지를 제시하고 원주가 결정
@@ -466,11 +566,53 @@ Q2. Tristram과의 시각적 대비 방향은?
 
 | 문서 | 용도 | 에이전트 |
 |------|------|---------|
-| `prompts/_config.json` | 컨벤션 설정 + 스토리 소스 경로 | @ArtDirector, @Prompter |
-| `prompts/_categories.md` | 카테고리 목록 | 전체 |
-| `prompts/{cat}/{id}/sheet.json` | 엔티티 시트 (story_ref 포함) | @ArtDirector, @Prompter, @Curator |
+| `_protocol/art-config.json` | 컨벤션 설정 + 스토리 소스 경로 | @ArtDirector, @Prompter |
+| `_protocol/art-categories.md` | 카테고리 목록 | 전체 |
+| `characters/main/{char}/art/sheet.json` | 캐릭터 외형 시트 (story_ref 포함) | @ArtDirector, @Prompter, @Curator |
+| `characters/main/{char}/art/prompts.json` | 캐릭터 프롬프트 집합 | @Prompter |
+| `characters/main/{char}/art/_favorites/` | 선별 이미지 (doc-viewer 반영) | @Curator |
+| `tools/comfyui/prompts/comfyui/` | ComfyUI 배치 .txt ([positive]/[negative] 섹션) | @Prompter |
+| `tools/comfyui/prompts/gemini/` | Gemini Web 참고용 .txt (자동화 아님) | @Prompter |
+| `art/output/raw/` | ComfyUI 생성 원본 저장 | @Curator |
+| `art/output/_favorites/` | 배포 대상 선별본 (deploy.py 소스) | @Curator |
 | DECISIONS.md | 확정 결정사항 | @ArtDirector |
-| 이 문서 (AGENTS.md) | 에이전트 정의/규칙 | 전체 |
+| 이 문서 (art-agents.md) | 에이전트 정의/규칙 | 전체 |
+
+---
+
+## 이미지 생성 파이프라인
+
+### 구조 개요
+
+```
+[CLI 프롬프트 실행]
+  ↓
+tools/comfyui/generate.py
+  ├── --char + --prompt-id 사용 시
+  │     → characters/main/{char}/art/_favorites/ (doc-viewer 즉시 반영)
+  └── 미사용 시 (배치/실험)
+        → art/output/raw/ (수동 선별 필요)
+              ↓ 선별 후
+        art/output/_favorites/ → deploy.py → Projects/crown-falle-dialogue-proto/assets/
+```
+
+### 카테고리별 생성 파라미터
+
+| 카테고리 | 모델 | 해상도 | steps | cfg | --category |
+|----------|------|--------|-------|-----|------------|
+| 포트레이트 (profiles) | sd15 | 512×512 | 30 | 7.0 | profiles |
+| 스탠딩 (standings) | sd15 | 512×768 | 30 | 7.0 | standings |
+| 배경 (bg) | xl | 1024×576 | 25 | 7.0 | bg |
+| 컨셉아트 | xl | 1024×1024 | 25 | 7.5 | — |
+
+### deploy.py 배치 규칙 (--all 모드)
+
+`art/output/_favorites/` 파일명에 다음 태그가 있으면 자동 분류:
+- `_p_` → `assets/profiles/`
+- `_s_` → `assets/standings/`
+- `_bg_` → `assets/bg/`
+
+예: `20260326_235355_bg_ironmead_wall.png` → `assets/bg/ironmead_wall.png`
 
 ### 스토리 소스 연결 (Interlude ↔ ImageGen)
 
@@ -592,6 +734,7 @@ sheet.json → story_ref.entity_type + entity_id
 
 | 항목 | 결정 시점 |
 |------|----------|
-| @Curator 자동 대조 스크립트 구현 여부 | generate.py 안정화 후 |
+| @Curator 자동 대조 스크립트 구현 여부 | 운영 시작 후 필요성 평가 |
 | 에이전트별 로그 저장 형식 | 운영 시작 후 필요성 평가 |
 | @ArtDirector의 아이디어 제안 주기 | 수동 호출 vs 매 세션 시작 시 자동 |
+| deploy.py — 캐릭터별 _favorites에서 직접 배포 지원 | 배치 운영 안정화 후 |
