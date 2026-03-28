@@ -248,10 +248,12 @@ quiet composed expression, three-quarter view, warm side lighting,
 1. 모든 프롬프트는 글로벌 스타일 프리픽스를 포함해야 함
 2. 캐릭터 묘사는 반드시 sheet.json의 character_block에서 가져옴 — 하드코딩 금지
 2a. **standing_composite 캐릭터 묘사 품질**: 포즈 액션 포커스로 얼굴/인상 묘사가 희석될 경우 portrait와의 character identity 불일치 발생. 규칙:
-    - 캐릭터 묘사는 portrait 수준 유지 필수 — 단순 나열 형태로라도 핵심 feature 보존
+    - **calibrated-to-output 원칙**: standing 프롬프트는 sheet.json character_block(설계값) 직접 복사 금지. 실제 portrait 생성 결과물에 calibrate된 묘사 사용. Gemini는 portrait에서 극단적 특징(gaunt, sunken eyes 등)을 완화하므로, standing에서 설계값 원문을 그대로 쓰면 portrait보다 더 극단적인 얼굴이 생성되어 위화감이 커짐. (2026-03-28 Tristram v5.2 확인)
+    - **묘사 강도 기준**: portrait 실제 출력이 기준. "angular face with defined cheekbones" vs "hollow cheeks, gaunt skin" — portrait가 완화된 버전이면 standing도 완화된 버전 사용.
+    - **피부 톤 앵커 필수**: 스탠딩은 조명이 portrait와 달라 피부 톤이 어두워지는 경향. "olive skin, light-to-medium warm tone — not dark" 등 명시적 앵커 포함.
+    - **의상 상태 명시**: 후드/클로크 등 열림/닫힘 상태는 "folded completely back — not raised" 수준으로 구체적으로 지시. "hood down" 만으로는 Gemini가 후드를 올리는 경향 있음.
     - sheet.json `generation_notes`에 명시된 Gemini 경향 대응 키워드는 축약 시에도 필수 포함 (예: Wren의 'NOT a child, defined jawline', Colt의 'skull visible beneath skin, not handsome not ugly — hard', Armand의 'crow's feet, forehead lines, burn scar, eye shadows')
     - threatening/back_turned 같이 action-heavy 포즈도 base character description 생략 금지
-    - (2026-03-28 Tristram default/speaking에서 portrait와 character identity 불일치 확인)
 3. 장면 프롬프트의 캐릭터 묘사는 references로 참조 — 직접 작성 금지
 4. 장면별 특수 묘사는 overrides에만 작성 (추가 전용, 시트 대체 불가)
 5. JSON 파일 변경 시 version 필드와 updated 날짜 갱신
