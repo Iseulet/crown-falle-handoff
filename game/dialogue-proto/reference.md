@@ -1,5 +1,5 @@
 # CrownFalle — Dialogue Prototype 시스템 레퍼런스
-> 갱신: 2026-03-28 | 스토리 내용 미포함
+> 갱신: 2026-03-29 | 스토리 내용 미포함
 
 ---
 
@@ -104,10 +104,10 @@ main.js         — 초기화, JSON fetch, 이벤트 바인딩
 
 ```json
 {
-  "n001": { "type": "narration", "mode": "c", "text": "...", "next": "n002" },
-  "n002": { "type": "dialogue",  "mode": "c", "speaker": "seren", "text": "...", "next": "n003" },
+  "n001": { "type": "narration", "text": "...", "next": "n002" },
+  "n002": { "type": "dialogue", "speaker": "seren", "text": "...", "next": "n003" },
   "n003": {
-    "type": "choice", "mode": "c",
+    "type": "choice",
     "options": [
       { "text": "선택지A", "next": "n004a", "tags": ["curious"] },
       { "text": "선택지B", "next": "n004b", "tags": ["cold"] }
@@ -146,7 +146,8 @@ assets/
 
 **에셋 소스:** `Dev/contents/crown-falle-interlude/characters/main/{char}/art/_favorites/`
 
-standing composite 이미지 → `rembg`로 배경 제거 → `assets/standings/{char}/{action}.png`
+standing composite 이미지 (grey bg ~#7f7f7f) → renderer-a.js `_applyColorKey()` 로 배경 제거 (canvas, 코너 자동감지)
+또는 `rembg`로 전처리 후 투명 PNG 배치도 지원.
 
 ---
 

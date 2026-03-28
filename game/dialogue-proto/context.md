@@ -1,5 +1,5 @@
 # CrownFalle — Dialogue Prototype 현황
-> 갱신: 2026-03-28 | 스토리 내용 미포함 (시스템/진행현황만)
+> 갱신: 2026-03-29 | 스토리 내용 미포함 (시스템/진행현황만)
 
 ---
 
@@ -31,8 +31,9 @@ python -m http.server 8080
 ## 구현 현황
 
 ### 완료
-- [x] C모드 렌더러 (텍스트 히스토리 누적, Citizen Sleeper 방식)
+- [x] C모드 렌더러 (텍스트 히스토리 누적 — 최신 노드 상단 갱신 방식)
 - [x] A모드 렌더러 (전체화면 VN, 텍스트 교체)
+- [x] A모드 스탠딩 컬러 키 — canvas 기반 배경 제거 (코너 자동감지, tolerance=22)
 - [x] C↔A 모드 전환 (fade/cut)
 - [x] 선택지 분기 + 합류
 - [x] 씬 종료 화면 (fade to black + 다시 시작)
@@ -44,7 +45,7 @@ python -m http.server 8080
 ### 데이터 현황
 - 캐릭터: **9명** (tristram, seren, wren, armand, colt, flay, the-scald, dealer, employer)
 - 씬: **15개** (ch1 × 4, ch2 × 6, ch3 × 5)
-- 노드 파일: 15개 (`data/nodes/*.json`)
+- 노드 파일: 17개 (`data/nodes/*.json`, test 포함)
 
 ### 미완료 / 다음 작업
 - [ ] 이미지 에셋 배치 — profiles/standings/bg 실제 이미지 연결
