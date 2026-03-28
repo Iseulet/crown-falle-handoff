@@ -247,6 +247,8 @@ quiet composed expression, three-quarter view, warm side lighting,
 **규칙:**
 1. 모든 프롬프트는 글로벌 스타일 프리픽스를 포함해야 함
 2. 캐릭터 묘사는 반드시 sheet.json의 character_block에서 가져옴 — 하드코딩 금지
+   - **character_block 동기화 의무**: portrait 프롬프트가 생성 반복을 통해 수정/확정된 경우, sheet.json의 character_block과 appearance를 즉시 동기화해야 함. character_block은 설계 초안이 아니라 확정된 portrait 프롬프트의 요약이어야 함.
+   - character_block 수정 시 `character_block_note` 필드에 날짜와 변경 이유 기록
 2a. **standing_composite 캐릭터 묘사 품질**: 포즈 액션 포커스로 얼굴/인상 묘사가 희석될 경우 portrait와의 character identity 불일치 발생. 규칙:
     - **calibrated-to-output 원칙**: standing 프롬프트는 sheet.json character_block(설계값) 직접 복사 금지. 실제 portrait 생성 결과물에 calibrate된 묘사 사용. Gemini는 portrait에서 극단적 특징(gaunt, sunken eyes 등)을 완화하므로, standing에서 설계값 원문을 그대로 쓰면 portrait보다 더 극단적인 얼굴이 생성되어 위화감이 커짐. (2026-03-28 Tristram v5.2 확인)
     - **묘사 강도 기준**: portrait 실제 출력이 기준. "angular face with defined cheekbones" vs "hollow cheeks, gaunt skin" — portrait가 완화된 버전이면 standing도 완화된 버전 사용.
