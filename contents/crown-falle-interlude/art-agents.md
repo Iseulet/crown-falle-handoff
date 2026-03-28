@@ -247,16 +247,24 @@ quiet composed expression, three-quarter view, warm side lighting,
 **규칙:**
 1. 모든 프롬프트는 글로벌 스타일 프리픽스를 포함해야 함
 2. 캐릭터 묘사는 반드시 sheet.json의 character_block에서 가져옴 — 하드코딩 금지
+2a. **standing_composite 캐릭터 묘사 품질**: 포즈 액션 포커스로 얼굴/인상 묘사가 희석될 경우 portrait와의 character identity 불일치 발생. 규칙:
+    - 캐릭터 묘사는 portrait 수준 유지 필수 — 단순 나열 형태로라도 핵심 feature 보존
+    - sheet.json `generation_notes`에 명시된 Gemini 경향 대응 키워드는 축약 시에도 필수 포함 (예: Wren의 'NOT a child, defined jawline', Colt의 'skull visible beneath skin, not handsome not ugly — hard', Armand의 'crow's feet, forehead lines, burn scar, eye shadows')
+    - threatening/back_turned 같이 action-heavy 포즈도 base character description 생략 금지
+    - (2026-03-28 Tristram default/speaking에서 portrait와 character identity 불일치 확인)
 3. 장면 프롬프트의 캐릭터 묘사는 references로 참조 — 직접 작성 금지
 4. 장면별 특수 묘사는 overrides에만 작성 (추가 전용, 시트 대체 불가)
 5. JSON 파일 변경 시 version 필드와 updated 날짜 갱신
 6. 프롬프트에 "no anime style, no modern elements"는 항상 포함 (Gemini 네거티브 대체)
-7. **fullbody 프롬프트 분할 방지 (검증 완료):**
+7. **fullbody / standing_composite 프롬프트 분할 방지:**
    - "Full body character design", "standing pose, front view" 문구 사용 금지
    - 대신 자연어 서술: "[He/She] stands facing the viewer, [his/her] whole body visible from head to boots against a plain dark background."
-   - style_prefix 다음에 "A single painting of one person. Not a character sheet. Not multiple views." 반드시 포함
-   - scene 프롬프트에는 "A single painting. Not a character sheet. Not multiple views." (다인물 장면은 "of one person" 제거)
-   - (2026-03-22 Wren fullbody로 검증 완료)
+   - style_prefix 다음에 단일 인물 선언 반드시 포함:
+     - fullbody: `"A single painting of one person. Not a character sheet. Not multiple views."`
+     - standing_composite: `"A single full-body painting of one person. ONE figure. ONE pose. ONE angle. Do not create panels, grids, or multiple instances of the character. Do not show the same figure from different angles or as a triptych. This is not a character sheet."`
+     - scene: `"A single painting. Not a character sheet. Not multiple views."` (다인물 장면은 "of one person" 제거)
+   - **"Not a character sheet. Not multiple views." 만으로는 Gemini의 3분할(triptych) 생성을 억제하지 못함** — ONE figure/ONE pose/ONE angle 명시 필수 (2026-03-28 확인)
+   - (fullbody 분할: 2026-03-22 Wren fullbody 검증 완료 / standing_composite 3분할: 2026-03-28 Tristram threatening 확인)
 8. **fullbody 종횡비는 9:16. 3:4 사용 금지** (비율 과장 발생, 2026-03-22 검증).
    비율 보정 줄 필수: "Realistic human body proportions — head is one-eighth of total height, legs make up half the body length. Tall vertical composition."
    상체 묘사가 무거운 캐릭터(갑옷, 변이 등)는 LOWER BODY 섹션을 별도 문단으로 분리하여 하체 비중 확보.
