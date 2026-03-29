@@ -1,5 +1,5 @@
 # CrownFalle — Dialogue Prototype 시스템 레퍼런스
-> 갱신: 2026-03-29 | 스토리 내용 미포함
+> 갱신: 2026-03-29 (2차) | 스토리 내용 미포함
 
 ---
 
@@ -167,3 +167,87 @@ Ch1 (Ironmead, 4씬) → Ch2 (南路, 6씬) → Ch3 (야영지, 5씬) → null
 |------|------|
 | 클릭 / 스페이스 / Enter | 다음 노드 진행 |
 | 1 / 2 / 3 숫자키 | 선택지 단축키 |
+
+---
+
+## Unity ink C모드 아키텍처
+
+> 웹 프로토타입에서 검증한 C모드를 Unity 6.3 LTS + ink로 구현.
+> 범위: C모드 단독. A모드 및 C↔A 전환은 후속 작업.
+
+### C# 클래스 구조
+
+```
+InkDialogueManager
+  Story.Continue() → 태그 파싱(InkTagParser) → DialogueEvent 발행
+       ↓
+CModePanelController
+  ├─ Narration/Dialogue → TextEntryFactory  → NarrationEntry/DialogueEntry 프리팹
+  ├─ VoiceSingle        → VoicePairFactory  → VoiceSingle 프리팹
+  ├─ VoicePair          → VoicePairFactory  → VoicePairRow 프리팹
+  ├─ Choice             → ChoiceCardFactory → ChoiceCardRow/NeutralChoice 프리팹
+  └─ MoodChange         → MoodLayerController → Image 레이어 페이드
+
+선택 클릭 → ink ChooseChoiceIndex() → Continue()
+```
+
+### ink 태그 컨벤션
+
+| 태그 | 효과 |
+|------|------|
+| `# speaker:seren` | 대사 렌더링, 캐릭터 이름 색상 |
+| `# voice:faith` | 단독 내면 목소리 (좌측) |
+| `# voice:cynical` | 단독 내면 목소리 (우측) |
+| `# voice_pair_start` / `# voice_pair_end` | 대립 목소리 쌍 — 한 줄 배치 |
+| `# axis:cautious` | 선택지 카드 축 (신중=Left) |
+| `# axis:bold` | 선택지 카드 축 (과감=Right) |
+| `# axis:faith` | 선택지 카드 축 (신념=Left) |
+| `# axis:cynical` | 선택지 카드 축 (냉소=Right) |
+| `# whisper:텍스트` | 카드 상단 속삭임 |
+| `# consequence:텍스트` | 카드 하단 결과 암시 (빨간 이탤릭) |
+| `# neutral` | 중립 선택지 (카드 아래 가운데) |
+| `# mood:presence/tension/cold` | 분위기 레이어 전환 |
+| `# bg:bg_id` | 배경 교체 (후속 구현) |
+| `> aside: 텍스트` | 텍스트 내 부연 (대사/나레이션 내 인라인) |
+
+### 3축 파라미터 (ink 변수)
+
+| 변수 | 방향 | 선택 유형 |
+|------|------|-----------|
+| `axis_stance_faith` | 신념(+) ↔ 냉소(-) | 태도 선택 |
+| `axis_method_bold` | 과감(+) ↔ 신중(-) | 방법 선택 |
+| `axis_cost_release` | 해방(+) ↔ 억제(-) | 대가 선택 |
+
+### 색상 기준
+
+| 용도 | 색상 |
+|------|------|
+| 배경 | `#060504` |
+| 오버레이 패널 | `rgba(6,5,4,0.84)` |
+| 본문 텍스트 | `#D4CBBE` |
+| 나레이션 | `#A09484` |
+| 흐림 | `#6A6054` |
+| 결과 암시 | `#8A5040` |
+| Seren | `#7EB8A0` |
+| Tristram | `#6490B4` |
+| 신념/Left | `#6A9AB8` |
+| 냉소/Right | `#C09060` |
+| 신중/Left | `#7A9A6A` |
+| 과감/Right | `#B85A48` |
+
+### ScriptableObject 타입
+
+- `CharacterData` — `characterId`, `displayName`, `nameColor`
+- `AxisData` — `axisId`, `displayLabel`, `color`, `side(Left/Right)`
+
+### 프리팹 목록
+
+| 프리팹 | 필수 자식 오브젝트 이름 |
+|--------|------------------------|
+| NarrationEntry | TMP (이탤릭) |
+| DialogueEntry | `SpeakerName`, `DialogueText`, `AsideText` TMP |
+| VoicePairRow | 좌VoiceCell + 우VoiceCell (각 `labelText`, `bodyText`, `borderImage`) |
+| VoiceSingle | 단일 VoiceCell |
+| ChoiceCardRow | HorizontalLayoutGroup 컨테이너 |
+| ChoiceCard | `AxisLabel`, `WhisperText`, `ActionText`, `ConsequenceText` TMP + `Border` Image |
+| NeutralChoice | Button + TMP |
