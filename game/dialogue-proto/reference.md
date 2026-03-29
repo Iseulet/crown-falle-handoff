@@ -1,253 +1,237 @@
 # CrownFalle — Dialogue Prototype 시스템 레퍼런스
-> 갱신: 2026-03-29 (2차) | 스토리 내용 미포함
+> 갱신: 2026-03-29 (3차) | 스토리 내용 미포함
 
 ---
 
-## 시스템 아키텍처
+## 1. 시스템 아키텍처
 
-### C↔A 하이브리드 모드
-
-| 모드 | 레이아웃 | 히스토리 | 용도 |
-|------|---------|---------|------|
-| C모드 | 좌측 배경 + 우측 텍스트 패널 | 누적 (스크롤) | 기본. 나레이션+대사+선택지 |
-| A모드 | 전체화면 배경 + 스탠딩 + 하단 대화박스 | 교체 | 핵심 씬 전용 |
-
-**전환:** `mode_switch` 노드로 제어. 전환 시 히스토리 클리어.
-
-### JS 모듈 구조
+### 전체 구조
 
 ```
-engine.js       — 노드 순회, 모드 관리, 배경 관리, 씬 체인, 선택 기록
-renderer-c.js   — C모드 렌더러 (히스토리 누적, placeholder)
-renderer-a.js   — A모드 렌더러 (스탠딩 배치, 텍스트 교체)
-main.js         — 초기화, JSON fetch, 이벤트 바인딩
+crown-falle-dialogue-proto/
+├── index.html                  ← 기존 JSON 기반 C/A 프로토
+├── c-mode/                     ← 신규 ink.js C모드
+│   ├── index.html
+│   ├── css/c-mode.css
+│   └── js/
+│       ├── tag-parser.js       ← ink 태그 → 구조체 파싱
+│       ├── ink-engine.js       ← inkjs Story 래핑 + 큐 기반 step()
+│       ├── c-mode-renderer.js  ← DOM 렌더링 전체
+│       └── main.js             ← 초기화, advance 루프, 디버그
+├── ink/
+│   ├── stories/                ← 씬별 .ink + .ink.json
+│   └── includes/
+│       ├── variables.ink       ← 3축 파라미터 + 관계 변수 + 플래그
+│       └── functions.ink
+└── data/
+    ├── characters.json         ← UI/에셋용 캐릭터 정의
+    ├── characters_traits.json  ← axis_weights (relation-engine용)
+    ├── scenes.json
+    └── nodes/*.json            ← 기존 JSON 노드 데이터
 ```
 
 ---
 
-## 데이터 스키마
+## 2. ink.js C모드 — 이벤트 시스템
 
-### characters.json — 캐릭터 정의
+### 이벤트 분류
+
+| 분류 | 이벤트 종류 | 처리 방식 |
+|---|---|---|
+| **Side-effect** | mood, bg, location | advance 없이 즉시 처리 |
+| **Content** | text, voice_pair, mode_switch | advance 1회 = 1항목 출력 |
+| **Special** | choices, end | choices: 카드 클릭 대기 / end: 씬 종료 |
+
+### 이벤트 흐름
+
+```
+story.Continue() → tag-parser.js 파싱
+    ↓
+Side-effect 태그 → 즉시 큐 삽입 (mood/bg/location)
+mode_switch → Content 이벤트로 큐 삽입
+next_scene → _lastNextScene 저장
+scene_chars → _sceneChars 저장
+voice_pair → 버퍼링 후 voice_pair 이벤트
+    ↓
+advance() → step() → 사이드이펙트 즉시 소비 → Content 1개 렌더링
+```
+
+---
+
+## 3. ink 태그 전체 목록
+
+| 태그 | 분류 | UI 결과 |
+|---|---|---|
+| (태그 없음) | Content | 나레이션 (이탤릭 흐린) |
+| `# speaker:id` | Content | 이름(색상) + 대사 |
+| `# voice:faith/cautious` | Content | 좌측 voice |
+| `# voice:cynical/bold` | Content | 우측 voice |
+| `# voice_pair_start/end` | 제어 | 2개 voice → 좌우 한 줄 |
+| `# mood:presence/tension/cold` | Side-effect | 배경 레이어 활성화 |
+| `# bg:id` | Side-effect | 배경 변경 (예정) |
+| `# location:텍스트` | Side-effect | location badge 갱신 |
+| `# scene_chars:a,b,c` | 메타 | _sceneChars 저장 |
+| `# mode_switch:c_to_a/a_to_c` | Content | `— — —` 구분선 |
+| `# next_scene:씬id` | 메타 | end 이벤트에 포함 |
+| `# axis:faith/cautious` | choice | 좌카드 |
+| `# axis:cynical/bold` | choice | 우카드 |
+| `# whisper:텍스트` | choice | 카드 상단 속삭임 |
+| `# consequence:텍스트` | choice | 카드 하단 결과 암시 |
+| `# neutral` | choice | 중립 선택지 (가운데) |
+| `> aside: 텍스트` | 텍스트 내 | 대사 아래 흐린 이탤릭 |
+
+---
+
+## 4. 씬 파일 구조 컨벤션
+
+```ink
+INCLUDE ../includes/variables.ink
+
+-> scene_id
+
+=== scene_id ===
+# bg:배경id
+# location:위치명
+# scene_chars:char1,char2
+
+[본문]
+
+~ met_xxx = true
+# next_scene:다음씬id
+-> END
+```
+
+**선택지 패턴:**
+```ink
++ [선택지] # axis:cautious # whisper:속삭임
+    ~ axis_method_bold -= 1
+    [분기 응답]
++ [선택지] # axis:bold # whisper:속삭임 # consequence:결과
+    ~ axis_method_bold += 1
+    [분기 응답]
++ [(중립)] # neutral
+    [분기 응답]
+-
+[공통 진행]
+```
+
+---
+
+## 5. 3축 파라미터 + 관계 시스템
+
+### ink 변수
+
+```ink
+VAR axis_method_bold = 0    // 과감(+) ↔ 신중(-)
+VAR axis_stance_faith = 0   // 신념(+) ↔ 냉소(-)
+VAR axis_cost_release = 0   // 해방(+) ↔ 억제(-)
+
+VAR rel_seren = 30
+VAR rel_wren = 20
+VAR rel_armand = 50
+VAR rel_colt = 10
+VAR rel_flay = -10
+```
+
+### characters_traits.json 구조 (relation-engine용, 2번 작업)
 
 ```json
 {
-  "tristram": {
-    "display_name": "Tristram",
-    "color": "#6490B4",
-    "role": "protagonist",
-    "portrait_position": "center 15%",
-    "profiles": {
-      "default":  "assets/profiles/tristram/default.png",
-      "smile":    "...",
-      "angry":    "...",
-      "thinking": "...",
-      "sad":      "..."
-    },
-    "standings": {
-      "default":     "assets/standings/tristram/default.png",
-      "speaking":    "...",
-      "threatening": "...",
-      "back_turned": "..."
-    },
-    "illustrations": {
-      "campfire": "assets/illustrations/tristram/campfire.png"
+  "seren": {
+    "display_name": "Seren",
+    "base_relation": 30,
+    "axis_weights": {
+      "method":  { "bold": -1, "cautious": 2 },
+      "stance":  { "cynical": 1,  "faith": 2 },
+      "cost":    { "restrain": 1, "release": -2 }
     }
   }
 }
 ```
 
-### actions.json — 액션 정의
+**방식 C (확정):**
+1. 플레이어 선택 → JS가 axis_weights 조회
+2. `rel_xxx += weight × delta` 계산
+3. `story.variablesState["rel_xxx"]` 직접 쓰기
+4. ink 내부에서 rel 값으로 대사 분기
 
+---
+
+## 6. 캐릭터 색상
+
+| 캐릭터 | 색상 |
+|---|---|
+| Tristram | `#6490B4` |
+| Seren | `#7EB8A0` |
+| Armand | `#C4956A` |
+| Wren | `#B8A060` |
+| Employer | `#8A8A7A` |
+| Colt | `#8A7A5A` |
+| Flay | `#6A4A6A` |
+| The Scald | `#9A5A3A` |
+
+| voice | 색상 | 배치 |
+|---|---|---|
+| faith (신념) | `#6A9AB8` | 좌 |
+| cautious (신중) | `#7A9A6A` | 좌 |
+| cynical (냉소) | `#C09060` | 우 |
+| bold (과감) | `#B85A48` | 우 |
+
+---
+
+## 7. 기존 JSON 프로토 — 스키마 (유지)
+
+### characters.json
 ```json
 {
-  "profiles":  { "default": {}, "smile": {}, "angry": {}, "thinking": {}, "sad": {} },
-  "standings": { "default": {}, "speaking": {}, "threatening": {}, "back_turned": {} }
+  "id": {
+    "display_name": "...", "color": "#...", "role": "protagonist|npc",
+    "profiles": { "default": "path", ... },
+    "standings": { "default": "path", ... }
+  }
 }
 ```
 
-`profiles` = 대사창 표정 아이콘 (tight bust, 192×192)
-`standings` = A모드 전신 컴포지팅 레이어 (grey bg #888888)
-
-### scenes.json — 씬 메타
-
+### scenes.json
 ```json
 {
   "scene_id": {
-    "chapter": 1,
-    "title": "씬 제목",
-    "location": "장소명",
-    "background": "backgrounds.json 키",
-    "characters": ["character_id"],
-    "initial_mode": "c",
-    "first_node": "n001",
-    "next": "다음_씬_id",
-    "standings": {
-      "a_mode": {
-        "character_id": { "slot": "left", "action": "default" }
-      }
-    }
+    "chapter": 1, "title": "...", "location": "...", "background": "bg_id",
+    "characters": ["id"], "initial_mode": "c", "first_node": "n001",
+    "next": "next_scene_id",
+    "standings": { "a_mode": { "char_id": { "slot": "left", "action": "default" } } }
   }
 }
 ```
 
-### nodes/{scene_id}.json — 노드 파일
-
-5가지 노드 타입:
-
-| 타입 | 필드 | 설명 |
-|------|------|------|
-| `narration` | text, next | 나레이션 텍스트 |
-| `dialogue` | speaker, text, aside, next | 캐릭터 대사 |
-| `choice` | options[] | 선택지 분기 |
-| `mode_switch` | from, to, transition, next | C↔A 전환 |
-| `bg_change` | background, transition, next | 씬 내 배경 교체 |
-
-```json
-{
-  "n001": { "type": "narration", "text": "...", "next": "n002" },
-  "n002": { "type": "dialogue", "speaker": "seren", "text": "...", "next": "n003" },
-  "n003": {
-    "type": "choice",
-    "options": [
-      { "text": "선택지A", "next": "n004a", "tags": ["curious"] },
-      { "text": "선택지B", "next": "n004b", "tags": ["cold"] }
-    ]
-  }
-}
-```
-
-### backgrounds.json — 배경 + 슬롯
-
-```json
-{
-  "bg_id": {
-    "image": "assets/bg/filename.png",
-    "label": "UI 표시용 장소명",
-    "standing_slots": [
-      { "id": "left",   "x_percent": 25, "y_percent": 40 },
-      { "id": "right",  "x_percent": 75, "y_percent": 40 },
-      { "id": "center", "x_percent": 50, "y_percent": 40 }
-    ]
-  }
-}
-```
+### nodes/{scene_id}.json 타입
+`narration` / `dialogue` / `choice` / `mode_switch` / `bg_change`
 
 ---
 
-## 에셋 경로 컨벤션
+## 8. 에셋 경로 컨벤션
 
 ```
 assets/
-├── profiles/    {char}/default.png  — 대화창 표정 아이콘 (192×192)
+├── profiles/    {char}/default.png  — 대화창 아이콘 (192×192)
 ├── standings/   {char}/{action}.png — A모드 전신 (투명bg PNG)
-├── bg/          {bg_id}.png         — 배경 이미지 (1920×1080)
-└── illustrations/ {char}/{name}.png — 삽화 (16:9 또는 자유)
+├── bg/          {bg_id}.png         — 배경 (1920×1080)
+└── illustrations/ {char}/{name}.png
 ```
-
-**에셋 소스:** `Dev/contents/crown-falle-interlude/characters/main/{char}/art/_favorites/`
-
-standing composite 이미지 (grey bg ~#7f7f7f) → renderer-a.js `_applyColorKey()` 로 배경 제거 (canvas, 코너 자동감지)
-또는 `rembg`로 전처리 후 투명 PNG 배치도 지원.
 
 ---
 
-## 씬 체인 구조 (챕터 개요)
+## 9. Unity ink C모드 아키텍처 (참고)
 
-```
-Ch1 (Ironmead, 4씬) → Ch2 (南路, 6씬) → Ch3 (야영지, 5씬) → null
-```
-
-각 씬의 `next` 필드로 순차 연결. 마지막 씬은 `next: null`.
-
----
-
-## 입력 바인딩
-
-| 입력 | 동작 |
-|------|------|
-| 클릭 / 스페이스 / Enter | 다음 노드 진행 |
-| 1 / 2 / 3 숫자키 | 선택지 단축키 |
-
----
-
-## Unity ink C모드 아키텍처
-
-> 웹 프로토타입에서 검증한 C모드를 Unity 6.3 LTS + ink로 구현.
-> 범위: C모드 단독. A모드 및 C↔A 전환은 후속 작업.
-
-### C# 클래스 구조
+> 웹 프로토 검증 완료 후 이식 예정. 현재 대기 중.
 
 ```
 InkDialogueManager
-  Story.Continue() → 태그 파싱(InkTagParser) → DialogueEvent 발행
+  Story.Continue() → InkTagParser → DialogueEvent 발행
        ↓
 CModePanelController
-  ├─ Narration/Dialogue → TextEntryFactory  → NarrationEntry/DialogueEntry 프리팹
-  ├─ VoiceSingle        → VoicePairFactory  → VoiceSingle 프리팹
-  ├─ VoicePair          → VoicePairFactory  → VoicePairRow 프리팹
-  ├─ Choice             → ChoiceCardFactory → ChoiceCardRow/NeutralChoice 프리팹
-  └─ MoodChange         → MoodLayerController → Image 레이어 페이드
-
-선택 클릭 → ink ChooseChoiceIndex() → Continue()
+  ├─ TextEntryFactory  → NarrationEntry / DialogueEntry
+  ├─ VoicePairFactory  → VoiceSingle / VoicePairRow
+  ├─ ChoiceCardFactory → ChoiceCardRow / NeutralChoice
+  └─ MoodLayerController → Image 레이어 페이드
 ```
-
-### ink 태그 컨벤션
-
-| 태그 | 효과 |
-|------|------|
-| `# speaker:seren` | 대사 렌더링, 캐릭터 이름 색상 |
-| `# voice:faith` | 단독 내면 목소리 (좌측) |
-| `# voice:cynical` | 단독 내면 목소리 (우측) |
-| `# voice_pair_start` / `# voice_pair_end` | 대립 목소리 쌍 — 한 줄 배치 |
-| `# axis:cautious` | 선택지 카드 축 (신중=Left) |
-| `# axis:bold` | 선택지 카드 축 (과감=Right) |
-| `# axis:faith` | 선택지 카드 축 (신념=Left) |
-| `# axis:cynical` | 선택지 카드 축 (냉소=Right) |
-| `# whisper:텍스트` | 카드 상단 속삭임 |
-| `# consequence:텍스트` | 카드 하단 결과 암시 (빨간 이탤릭) |
-| `# neutral` | 중립 선택지 (카드 아래 가운데) |
-| `# mood:presence/tension/cold` | 분위기 레이어 전환 |
-| `# bg:bg_id` | 배경 교체 (후속 구현) |
-| `> aside: 텍스트` | 텍스트 내 부연 (대사/나레이션 내 인라인) |
-
-### 3축 파라미터 (ink 변수)
-
-| 변수 | 방향 | 선택 유형 |
-|------|------|-----------|
-| `axis_stance_faith` | 신념(+) ↔ 냉소(-) | 태도 선택 |
-| `axis_method_bold` | 과감(+) ↔ 신중(-) | 방법 선택 |
-| `axis_cost_release` | 해방(+) ↔ 억제(-) | 대가 선택 |
-
-### 색상 기준
-
-| 용도 | 색상 |
-|------|------|
-| 배경 | `#060504` |
-| 오버레이 패널 | `rgba(6,5,4,0.84)` |
-| 본문 텍스트 | `#D4CBBE` |
-| 나레이션 | `#A09484` |
-| 흐림 | `#6A6054` |
-| 결과 암시 | `#8A5040` |
-| Seren | `#7EB8A0` |
-| Tristram | `#6490B4` |
-| 신념/Left | `#6A9AB8` |
-| 냉소/Right | `#C09060` |
-| 신중/Left | `#7A9A6A` |
-| 과감/Right | `#B85A48` |
-
-### ScriptableObject 타입
-
-- `CharacterData` — `characterId`, `displayName`, `nameColor`
-- `AxisData` — `axisId`, `displayLabel`, `color`, `side(Left/Right)`
-
-### 프리팹 목록
-
-| 프리팹 | 필수 자식 오브젝트 이름 |
-|--------|------------------------|
-| NarrationEntry | TMP (이탤릭) |
-| DialogueEntry | `SpeakerName`, `DialogueText`, `AsideText` TMP |
-| VoicePairRow | 좌VoiceCell + 우VoiceCell (각 `labelText`, `bodyText`, `borderImage`) |
-| VoiceSingle | 단일 VoiceCell |
-| ChoiceCardRow | HorizontalLayoutGroup 컨테이너 |
-| ChoiceCard | `AxisLabel`, `WhisperText`, `ActionText`, `ConsequenceText` TMP + `Border` Image |
-| NeutralChoice | Button + TMP |
