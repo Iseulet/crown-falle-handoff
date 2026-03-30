@@ -48,6 +48,23 @@ python -m http.server 8080
 
 ---
 
+## art-direction-viewer 툴 (2026-03-30 추가)
+
+| 항목 | 내용 |
+|------|------|
+| 경로 | `_tools/art-direction-viewer/` |
+| UI 포트 | `localhost:5501` (Vite dev) |
+| API 포트 | `localhost:5500` (Python serve.py) |
+| 실행 | `python serve.py` + `npm run dev` (art-direction-viewer 폴더) |
+
+### 기능
+- **Scenes 탭**: 씬별 AD Notes + 이미지 슬롯 (붙여넣기/파일 업로드, 80px watermark crop)
+- **ComfyUI 탭**: 설치 모델 자동 로드, 씬 프롬프트 자동 주입, 1~4장 배치 생성
+- **Script 탭**: ink 스크립트 + 씬 이미지 2열 레이아웃
+- 이미지: `assets/scenes/{chapter}/{scene}/img_N.png` 영속 저장
+
+---
+
 ## 기존 JSON 프로토 — 데이터 현황
 
 - 캐릭터: **9명** (tristram, seren, wren, armand, colt, flay, the-scald, dealer, employer)
